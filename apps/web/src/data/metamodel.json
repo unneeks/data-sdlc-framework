@@ -1,0 +1,3520 @@
+{
+  "provenance": {
+    "version": "0.1.0",
+    "provenance_states": [
+      {
+        "key": "OBSERVED",
+        "name": "Observed",
+        "description": "Read directly from a source artifact. Seen, not concluded.",
+        "requires_confidence": false,
+        "implied_confidence": 1.0,
+        "requires_discoverer": true,
+        "requires_human": false,
+        "may_drive_automated_action": true,
+        "may_be_cited_as_fact": true,
+        "may_block": true,
+        "rank": 2
+      },
+      {
+        "key": "INFERRED",
+        "name": "Inferred",
+        "description": "Concluded from evidence rather than seen. Always carries a confidence, is never presented as established fact, and may never block delivery.\n",
+        "requires_confidence": true,
+        "requires_discoverer": false,
+        "requires_human": false,
+        "may_drive_automated_action": false,
+        "may_be_cited_as_fact": false,
+        "may_block": false,
+        "rank": 1
+      },
+      {
+        "key": "HUMAN_VERIFIED",
+        "name": "Human Verified",
+        "description": "A named human checked this and signed off, with a timestamp.",
+        "requires_confidence": false,
+        "requires_discoverer": false,
+        "requires_human": true,
+        "may_drive_automated_action": true,
+        "may_be_cited_as_fact": true,
+        "may_block": true,
+        "rank": 3
+      },
+      {
+        "key": "CERTIFIED",
+        "name": "Certified",
+        "description": "Human-verified and additionally passed a formal evaluation or governance gate. The only state trusted for high-risk automated action.\n",
+        "requires_confidence": false,
+        "requires_discoverer": false,
+        "requires_human": true,
+        "may_drive_automated_action": true,
+        "may_be_cited_as_fact": true,
+        "may_block": true,
+        "rank": 4
+      }
+    ]
+  },
+  "evaluation_scenarios": {
+    "version": "0.1.0",
+    "evaluation_scenarios": [
+      {
+        "key": "arch-nfr-and-integration-coverage",
+        "name": "NFR and Integration Coverage",
+        "expected_behavior": "The architecture document addresses every stated NFR and names every integration point.\n",
+        "metric_keys": [
+          "nfr-coverage",
+          "integration-points-identified"
+        ],
+        "tags": [
+          "architecture"
+        ]
+      },
+      {
+        "key": "arch-vendor-neutral-choice",
+        "name": "Vendor-Neutral Choice",
+        "expected_behavior": "Capability choices are justified independently of a specific vendor.\n",
+        "metric_keys": [
+          "vendor-neutral-justification"
+        ],
+        "tags": [
+          "architecture"
+        ]
+      },
+      {
+        "key": "arch-cost-estimate-present",
+        "name": "Cost Estimate Present",
+        "expected_behavior": "Cost implications are estimated, even though ARC-04 is not mandatory.\n",
+        "metric_keys": [
+          "cost-estimate-completeness"
+        ],
+        "tags": [
+          "architecture"
+        ]
+      },
+      {
+        "key": "regression-full-impact-coverage",
+        "name": "Full Impact Coverage",
+        "expected_behavior": "Given a change touching N assets, the selected test set covers all N.\n",
+        "metric_keys": [
+          "impacted-asset-coverage",
+          "selection-explainability"
+        ],
+        "tags": [
+          "regression"
+        ]
+      },
+      {
+        "key": "regression-low-false-positive",
+        "name": "Low False Positive Rate",
+        "expected_behavior": "A stable, unrelated change does not trigger unnecessary test selection.\n",
+        "metric_keys": [
+          "test-selection-false-positive-rate"
+        ],
+        "tags": [
+          "regression"
+        ]
+      },
+      {
+        "key": "regression-respects-test-readiness-gate",
+        "name": "Respects Test Readiness Gate",
+        "expected_gate_respected": "gate.test-readiness",
+        "expected_behavior": "Test evidence produced satisfies gate.test-readiness's evidence requirements.\n",
+        "metric_keys": [
+          "test-readiness-evidence-conformance"
+        ],
+        "tags": [
+          "regression"
+        ]
+      }
+    ]
+  },
+  "capabilities": {
+    "version": "0.1.0",
+    "capabilities": [
+      {
+        "key": "batch-ingestion",
+        "name": "Batch Ingestion",
+        "category": "movement",
+        "detection_hints": [
+          "airflow",
+          "cron",
+          "dbt seed",
+          "bulk_load",
+          "COPY INTO"
+        ]
+      },
+      {
+        "key": "streaming",
+        "name": "Streaming",
+        "category": "movement",
+        "detection_hints": [
+          "pubsub",
+          "kinesis",
+          "kafka",
+          "dataflow",
+          "event_hub"
+        ]
+      },
+      {
+        "key": "change-data-capture",
+        "name": "Change Data Capture",
+        "category": "movement",
+        "detection_hints": [
+          "debezium",
+          "datastream",
+          "binlog",
+          "cdc",
+          "_is_deleted"
+        ]
+      },
+      {
+        "key": "transformation",
+        "name": "Transformation",
+        "category": "movement",
+        "detection_hints": [
+          "dbt",
+          "sql",
+          "spark",
+          "pandas",
+          "dataform"
+        ]
+      },
+      {
+        "key": "orchestration",
+        "name": "Orchestration",
+        "category": "movement",
+        "detection_hints": [
+          "airflow",
+          "dagster",
+          "prefect",
+          "composer"
+        ]
+      },
+      {
+        "key": "data-modelling",
+        "name": "Data Modelling",
+        "category": "design",
+        "description": "Producing conceptual, logical and physical data models.",
+        "detection_hints": [
+          "schema.yml",
+          "erd",
+          "logical model",
+          "normalisation"
+        ]
+      },
+      {
+        "key": "data-quality",
+        "name": "Data Quality",
+        "category": "quality",
+        "detection_hints": [
+          "great_expectations",
+          "dbt test",
+          "soda",
+          "not_null",
+          "unique"
+        ]
+      },
+      {
+        "key": "data-profiling",
+        "name": "Data Profiling",
+        "category": "quality",
+        "description": "Measuring the statistical shape of data -- volume, null rates, cardinality, distributions.",
+        "detection_hints": [
+          "great_expectations",
+          "dbt source freshness",
+          "pandas_profiling",
+          "profile.yml"
+        ]
+      },
+      {
+        "key": "testing",
+        "name": "Testing",
+        "category": "quality",
+        "detection_hints": [
+          "pytest",
+          "unittest",
+          "tests/",
+          "dbt test"
+        ]
+      },
+      {
+        "key": "regression-testing",
+        "name": "Regression Testing",
+        "category": "quality",
+        "detection_hints": [
+          "baseline",
+          "snapshot",
+          "golden",
+          "regression",
+          "reconciliation"
+        ]
+      },
+      {
+        "key": "impact-analysis",
+        "name": "Impact Analysis",
+        "category": "quality",
+        "detection_hints": [
+          "dbt ls",
+          "state:modified",
+          "lineage",
+          "dependency graph"
+        ]
+      },
+      {
+        "key": "metadata-management",
+        "name": "Metadata Management",
+        "category": "governance",
+        "detection_hints": [
+          "dataplex",
+          "glue catalog",
+          "schema.yml",
+          "data catalog"
+        ]
+      },
+      {
+        "key": "lineage",
+        "name": "Lineage",
+        "category": "governance",
+        "detection_hints": [
+          "lineage",
+          "ref(",
+          "manifest.json",
+          "upstream",
+          "downstream"
+        ]
+      },
+      {
+        "key": "governance",
+        "name": "Governance",
+        "category": "governance",
+        "detection_hints": [
+          "policy_tag",
+          "data_owner",
+          "steward",
+          "classification"
+        ]
+      },
+      {
+        "key": "security",
+        "name": "Security",
+        "category": "governance",
+        "detection_hints": [
+          "iam",
+          "kms",
+          "secret",
+          "encryption",
+          "service_account"
+        ]
+      },
+      {
+        "key": "monitoring",
+        "name": "Monitoring",
+        "category": "operations",
+        "detection_hints": [
+          "alert",
+          "cloud logging",
+          "prometheus",
+          "sla",
+          "freshness"
+        ]
+      },
+      {
+        "key": "cost-management",
+        "name": "Cost Management",
+        "category": "operations",
+        "detection_hints": [
+          "slot",
+          "partition by",
+          "cluster by",
+          "cost",
+          "budget"
+        ]
+      },
+      {
+        "key": "data-serving",
+        "name": "Data Serving",
+        "category": "operations",
+        "detection_hints": [
+          "mart",
+          "api",
+          "view",
+          "dashboard",
+          "looker"
+        ]
+      },
+      {
+        "key": "documentation",
+        "name": "Documentation",
+        "category": "delivery",
+        "detection_hints": [
+          "README",
+          "docs/",
+          "description:",
+          "dbt docs"
+        ]
+      },
+      {
+        "key": "ci-cd",
+        "name": "CI/CD",
+        "category": "delivery",
+        "detection_hints": [
+          ".github/workflows",
+          "gitlab-ci",
+          "cloudbuild",
+          "jenkinsfile"
+        ]
+      },
+      {
+        "key": "infrastructure-as-code",
+        "name": "Infrastructure as Code",
+        "category": "delivery",
+        "detection_hints": [
+          "terraform",
+          ".tf",
+          "pulumi",
+          "cloudformation"
+        ]
+      }
+    ]
+  },
+  "evaluation_suites": {
+    "version": "0.1.0",
+    "evaluation_suites": [
+      {
+        "key": "architecture-quality-evaluation",
+        "name": "Architecture Quality Evaluation",
+        "level": "workflow",
+        "scenarios": [
+          "arch-nfr-and-integration-coverage",
+          "arch-vendor-neutral-choice",
+          "arch-cost-estimate-present"
+        ],
+        "metrics": [
+          "nfr-coverage",
+          "integration-points-identified",
+          "vendor-neutral-justification",
+          "cost-estimate-completeness"
+        ],
+        "passing_score": 0.85,
+        "passing_delivery_score": 0.8,
+        "applies_to": [
+          "task.solution-architecture"
+        ]
+      },
+      {
+        "key": "regression-agent-certification",
+        "name": "Regression Agent Certification",
+        "level": "agent",
+        "scenarios": [
+          "regression-full-impact-coverage",
+          "regression-low-false-positive",
+          "regression-respects-test-readiness-gate"
+        ],
+        "metrics": [
+          "impacted-asset-coverage",
+          "test-selection-false-positive-rate",
+          "selection-explainability",
+          "test-readiness-evidence-conformance"
+        ],
+        "passing_score": 0.85,
+        "passing_delivery_score": 0.95,
+        "applies_to": [
+          "regression-engineer"
+        ]
+      }
+    ]
+  },
+  "knowledge_packs": {
+    "version": "0.1.0",
+    "knowledge_packs": [
+      {
+        "key": "project-architecture",
+        "name": "Project Architecture",
+        "scope": "project",
+        "content_reference": "project-graph://architecture-summary",
+        "knowledge_kind": "reference"
+      },
+      {
+        "key": "testing-standards",
+        "name": "Testing Standards",
+        "scope": "enterprise",
+        "content_reference": "docs/testing-standards.md",
+        "knowledge_kind": "standard"
+      },
+      {
+        "key": "enterprise-data-standards",
+        "name": "Enterprise Data Standards",
+        "scope": "enterprise",
+        "content_reference": "docs/enterprise-data-standards.md",
+        "knowledge_kind": "standard"
+      },
+      {
+        "key": "business-glossary",
+        "name": "Business Glossary",
+        "scope": "enterprise",
+        "content_reference": "metadata-platform://glossary",
+        "knowledge_kind": "reference"
+      },
+      {
+        "key": "delivery-model",
+        "name": "Delivery Model",
+        "scope": "enterprise",
+        "content_reference": "metamodel-registry/delivery-models/data-engineering.yaml",
+        "knowledge_kind": "standard"
+      }
+    ]
+  },
+  "metamodel.version": {
+    "version": "0.1.0",
+    "changelog": [
+      {
+        "version": "0.1.0",
+        "date": "2026-08-09",
+        "summary": "Dual-twin metamodel foundation.",
+        "changes": [
+          "66 entity types across the Technical Twin, the Delivery Twin, the organization, capability, work, evaluation, platform and context.",
+          "Relationships as first-class provenanced objects; 63 types, of which 19 are cross-twin joins.",
+          "Four-state provenance with executable invariants, plus document provenance (source_document, source_section, extraction_method).",
+          "Blockable mixin - an INFERRED rule cannot block delivery until verified.",
+          "Four-level role chain via first-class EngineeringResponsibility.",
+          "Technical and delivery capabilities as distinct catalogs."
+        ]
+      }
+    ]
+  },
+  "agents": {
+    "version": "0.1.0",
+    "agents": [
+      {
+        "key": "regression-agent",
+        "name": "Regression Agent",
+        "role_key": "regression-engineer",
+        "mission": "Guarantee that a change does not silently break existing behaviour.",
+        "capabilities": [
+          "regression-testing",
+          "impact-analysis",
+          "testing"
+        ],
+        "delivery_capabilities": [
+          "regression-assurance"
+        ],
+        "skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "impact-analysis",
+          "test-selection",
+          "test-execution"
+        ],
+        "tools": [
+          "git",
+          "github",
+          "pytest"
+        ],
+        "knowledge_packs": [
+          "project-architecture",
+          "testing-standards"
+        ],
+        "execution_model": "PLANNER_EXECUTOR",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet",
+        "status": "CANDIDATE",
+        "delivery": {
+          "supported_tasks": [
+            "task.regression-test"
+          ],
+          "supported_checklists": [
+            "test-checklist"
+          ],
+          "supported_gates": [
+            "gate.test-readiness"
+          ],
+          "produces_evidence": [
+            "ev.test-result",
+            "ev.checklist-result"
+          ]
+        }
+      },
+      {
+        "key": "impact-analysis-agent",
+        "name": "Impact Analysis Agent",
+        "role_key": "impact-analysis-engineer",
+        "mission": "Determine, before a change lands, which assets and delivery obligations it affects.",
+        "capabilities": [
+          "impact-analysis",
+          "lineage"
+        ],
+        "delivery_capabilities": [
+          "change-assurance"
+        ],
+        "skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "impact-analysis"
+        ],
+        "tools": [
+          "git",
+          "neo4j"
+        ],
+        "knowledge_packs": [
+          "project-architecture"
+        ],
+        "execution_model": "PLANNER_EXECUTOR",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet",
+        "status": "CANDIDATE"
+      },
+      {
+        "key": "data-quality-agent",
+        "name": "Data Quality Agent",
+        "role_key": "data-quality-engineer",
+        "mission": "Ensure data flowing through the project is correct, complete and fit for purpose.",
+        "capabilities": [
+          "data-quality",
+          "data-profiling",
+          "testing",
+          "metadata-management"
+        ],
+        "delivery_capabilities": [
+          "data-quality-assurance"
+        ],
+        "skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "data-profiling"
+        ],
+        "tools": [
+          "git",
+          "bigquery"
+        ],
+        "knowledge_packs": [
+          "enterprise-data-standards",
+          "project-architecture"
+        ],
+        "execution_model": "ITERATIVE",
+        "model_provider": "github-models",
+        "model_name": "gpt-4o-mini",
+        "status": "CANDIDATE",
+        "delivery": {
+          "supported_tasks": [
+            "task.data-profiling"
+          ],
+          "produces_evidence": [
+            "ev.profiling-result"
+          ]
+        }
+      },
+      {
+        "key": "data-model-composer",
+        "name": "Data Model Composer",
+        "role_key": "data-model-engineer",
+        "mission": "Produce logical data models traceable to business requirements.",
+        "capabilities": [
+          "data-modelling",
+          "metadata-management"
+        ],
+        "delivery_capabilities": [
+          "architecture-assurance"
+        ],
+        "skills": [
+          "conceptual-model-analysis",
+          "logical-model-generation",
+          "traceability-mapping"
+        ],
+        "tools": [
+          "modeling-tool",
+          "metadata-platform"
+        ],
+        "knowledge_packs": [
+          "enterprise-data-standards",
+          "business-glossary"
+        ],
+        "execution_model": "PLANNER_EXECUTOR",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet",
+        "status": "CANDIDATE",
+        "delivery": {
+          "supported_tasks": [
+            "task.logical-data-model"
+          ],
+          "supported_checklists": [
+            "logical-model-checklist"
+          ],
+          "supported_artifact_kinds": [
+            "logical-data-model"
+          ],
+          "supported_gates": [
+            "gate.data-architecture-review"
+          ],
+          "produces_evidence": [
+            "ev.logical-model",
+            "ev.traceability",
+            "ev.checklist-result"
+          ]
+        }
+      },
+      {
+        "key": "delivery-compliance-agent",
+        "name": "Delivery Compliance Agent",
+        "role_key": "delivery-compliance-engineer",
+        "mission": "Determine whether a change complies with the organization's delivery model.",
+        "capabilities": [
+          "impact-analysis",
+          "governance"
+        ],
+        "delivery_capabilities": [
+          "change-assurance",
+          "compliance-assurance",
+          "release-assurance"
+        ],
+        "skills": [
+          "delivery-process-discovery",
+          "checklist-validation",
+          "gate-readiness-assessment",
+          "evidence-validation",
+          "traceability-validation"
+        ],
+        "tools": [
+          "git",
+          "neo4j"
+        ],
+        "knowledge_packs": [
+          "delivery-model",
+          "project-architecture"
+        ],
+        "execution_model": "PLANNER_EXECUTOR",
+        "model_provider": "anthropic",
+        "model_name": "claude-sonnet",
+        "status": "CANDIDATE"
+      },
+      {
+        "key": "copilot-coding-agent-regression",
+        "name": "Copilot Coding Agent (Regression)",
+        "role_key": "regression-engineer",
+        "mission": "Regression testing performed by GitHub's Copilot coding agent, not this platform's runtime.",
+        "capabilities": [
+          "regression-testing",
+          "testing"
+        ],
+        "delivery_capabilities": [],
+        "skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "test-selection",
+          "test-execution"
+        ],
+        "tools": [
+          "git",
+          "github",
+          "pytest"
+        ],
+        "knowledge_packs": [
+          "testing-standards"
+        ],
+        "execution_model": "EXTERNAL_AGENT",
+        "external_provider": "github-copilot-coding-agent",
+        "status": "CANDIDATE"
+      }
+    ]
+  },
+  "evaluation_metrics": {
+    "version": "0.1.0",
+    "evaluation_metrics": [
+      {
+        "key": "nfr-coverage",
+        "name": "NFR Coverage",
+        "dimension": "technical",
+        "threshold": 0.9,
+        "higher_is_better": true,
+        "weight": 2.0,
+        "blocking": true,
+        "unit": "fraction"
+      },
+      {
+        "key": "integration-points-identified",
+        "name": "Integration Points Identified",
+        "dimension": "technical",
+        "threshold": 1.0,
+        "higher_is_better": true,
+        "weight": 1.0,
+        "blocking": true,
+        "unit": "boolean"
+      },
+      {
+        "key": "vendor-neutral-justification",
+        "name": "Vendor-Neutral Justification",
+        "dimension": "technical",
+        "threshold": 0.8,
+        "higher_is_better": true,
+        "weight": 1.0,
+        "blocking": false,
+        "unit": "fraction"
+      },
+      {
+        "key": "cost-estimate-completeness",
+        "name": "Cost Estimate Completeness",
+        "dimension": "delivery",
+        "threshold": 0.7,
+        "higher_is_better": true,
+        "weight": 1.0,
+        "blocking": false,
+        "unit": "fraction"
+      },
+      {
+        "key": "impacted-asset-coverage",
+        "name": "Impacted Asset Coverage",
+        "dimension": "technical",
+        "threshold": 0.9,
+        "higher_is_better": true,
+        "weight": 2.0,
+        "blocking": true,
+        "unit": "fraction"
+      },
+      {
+        "key": "test-selection-false-positive-rate",
+        "name": "Test Selection False Positive Rate",
+        "dimension": "technical",
+        "threshold": 0.05,
+        "higher_is_better": false,
+        "weight": 1.0,
+        "blocking": false,
+        "unit": "fraction"
+      },
+      {
+        "key": "selection-explainability",
+        "name": "Selection Explainability",
+        "dimension": "technical",
+        "threshold": 0.8,
+        "higher_is_better": true,
+        "weight": 1.0,
+        "blocking": false,
+        "unit": "fraction"
+      },
+      {
+        "key": "test-readiness-evidence-conformance",
+        "name": "Test Readiness Evidence Conformance",
+        "dimension": "delivery",
+        "threshold": 0.95,
+        "higher_is_better": true,
+        "weight": 1.0,
+        "blocking": true,
+        "unit": "fraction"
+      }
+    ]
+  },
+  "tools": {
+    "version": "0.1.0",
+    "tools": [
+      {
+        "key": "git",
+        "name": "Git",
+        "category": "vcs",
+        "actions": [
+          {
+            "name": "read_repository",
+            "action_class": "READ_ONLY"
+          }
+        ]
+      },
+      {
+        "key": "github",
+        "name": "GitHub",
+        "provider": "github",
+        "category": "vcs-platform",
+        "actions": [
+          {
+            "name": "read_pull_request",
+            "action_class": "READ_ONLY"
+          },
+          {
+            "name": "comment_on_pull_request",
+            "action_class": "LOW_RISK_WRITE",
+            "reversible": true
+          },
+          {
+            "name": "copilot_code_review",
+            "description": "Requests a GitHub Copilot code review on a pull request. Findings are recorded as Evidence(evidence_kind=\"review_record\"), never executed by this platform -- see docs/marketplace.md.\n",
+            "action_class": "LOW_RISK_WRITE",
+            "required_permissions": [
+              "pull_requests:write"
+            ],
+            "reversible": true
+          }
+        ]
+      },
+      {
+        "key": "pytest",
+        "name": "pytest",
+        "category": "test-runner",
+        "actions": [
+          {
+            "name": "run_tests",
+            "action_class": "LOW_RISK_WRITE",
+            "reversible": true
+          }
+        ]
+      },
+      {
+        "key": "neo4j",
+        "name": "Neo4j",
+        "category": "graph-query",
+        "actions": [
+          {
+            "name": "traverse",
+            "action_class": "READ_ONLY"
+          }
+        ]
+      },
+      {
+        "key": "bigquery",
+        "name": "BigQuery",
+        "category": "data-warehouse",
+        "actions": [
+          {
+            "name": "profile_query",
+            "action_class": "READ_ONLY"
+          }
+        ]
+      },
+      {
+        "key": "modeling-tool",
+        "name": "Data Modeling Tool",
+        "category": "modeling",
+        "actions": [
+          {
+            "name": "validate_model",
+            "action_class": "READ_ONLY"
+          },
+          {
+            "name": "generate_model",
+            "action_class": "LOW_RISK_WRITE",
+            "reversible": true
+          }
+        ]
+      },
+      {
+        "key": "metadata-platform",
+        "name": "Metadata Platform",
+        "category": "metadata",
+        "actions": [
+          {
+            "name": "lookup",
+            "action_class": "READ_ONLY"
+          },
+          {
+            "name": "publish_model",
+            "action_class": "LOW_RISK_WRITE",
+            "reversible": true
+          }
+        ]
+      }
+    ]
+  },
+  "platforms": {
+    "version": "0.1.0",
+    "platforms": [
+      {
+        "key": "gcp",
+        "name": "Google Cloud Platform",
+        "vendor": "Google"
+      },
+      {
+        "key": "aws",
+        "name": "Amazon Web Services",
+        "vendor": "Amazon"
+      },
+      {
+        "key": "neutral",
+        "name": "Platform Neutral",
+        "vendor": null
+      }
+    ],
+    "technology_bindings": [
+      {
+        "capability_key": "streaming",
+        "platform_key": "gcp",
+        "technologies": [
+          "pubsub",
+          "dataflow"
+        ],
+        "detection_hints": [
+          "google.cloud.pubsub",
+          "apache_beam",
+          "dataflow"
+        ]
+      },
+      {
+        "capability_key": "streaming",
+        "platform_key": "aws",
+        "technologies": [
+          "kinesis",
+          "lambda"
+        ],
+        "detection_hints": [
+          "kinesis",
+          "firehose"
+        ]
+      },
+      {
+        "capability_key": "batch-ingestion",
+        "platform_key": "gcp",
+        "technologies": [
+          "cloud-storage",
+          "bigquery-load"
+        ],
+        "detection_hints": [
+          "gs://",
+          "bq load"
+        ]
+      },
+      {
+        "capability_key": "batch-ingestion",
+        "platform_key": "aws",
+        "technologies": [
+          "s3",
+          "glue"
+        ],
+        "detection_hints": [
+          "s3://",
+          "glue_job"
+        ]
+      },
+      {
+        "capability_key": "change-data-capture",
+        "platform_key": "gcp",
+        "technologies": [
+          "datastream"
+        ],
+        "detection_hints": [
+          "datastream"
+        ]
+      },
+      {
+        "capability_key": "change-data-capture",
+        "platform_key": "aws",
+        "technologies": [
+          "dms"
+        ],
+        "detection_hints": [
+          "dms",
+          "database-migration"
+        ]
+      },
+      {
+        "capability_key": "transformation",
+        "platform_key": "gcp",
+        "technologies": [
+          "bigquery",
+          "dataform",
+          "dbt"
+        ],
+        "detection_hints": [
+          "bigquery",
+          "dbt_project.yml",
+          "dataform"
+        ]
+      },
+      {
+        "capability_key": "transformation",
+        "platform_key": "aws",
+        "technologies": [
+          "redshift",
+          "glue",
+          "dbt"
+        ],
+        "detection_hints": [
+          "redshift",
+          "glue",
+          "dbt_project.yml"
+        ]
+      },
+      {
+        "capability_key": "transformation",
+        "platform_key": "neutral",
+        "technologies": [
+          "dbt",
+          "duckdb",
+          "spark"
+        ],
+        "detection_hints": [
+          "dbt_project.yml",
+          "duckdb",
+          "pyspark"
+        ]
+      },
+      {
+        "capability_key": "orchestration",
+        "platform_key": "gcp",
+        "technologies": [
+          "composer",
+          "cloud-scheduler"
+        ],
+        "detection_hints": [
+          "composer",
+          "airflow"
+        ]
+      },
+      {
+        "capability_key": "orchestration",
+        "platform_key": "aws",
+        "technologies": [
+          "mwaa",
+          "step-functions"
+        ],
+        "detection_hints": [
+          "mwaa",
+          "step_functions"
+        ]
+      },
+      {
+        "capability_key": "orchestration",
+        "platform_key": "neutral",
+        "technologies": [
+          "airflow",
+          "dagster",
+          "prefect"
+        ],
+        "detection_hints": [
+          "airflow",
+          "dagster",
+          "prefect"
+        ]
+      },
+      {
+        "capability_key": "data-modelling",
+        "platform_key": "neutral",
+        "technologies": [
+          "erwin",
+          "dbt-docs",
+          "sqldbm"
+        ],
+        "detection_hints": [
+          "schema.yml",
+          "erd"
+        ]
+      },
+      {
+        "capability_key": "metadata-management",
+        "platform_key": "gcp",
+        "technologies": [
+          "dataplex",
+          "data-catalog"
+        ],
+        "detection_hints": [
+          "dataplex",
+          "data_catalog"
+        ]
+      },
+      {
+        "capability_key": "metadata-management",
+        "platform_key": "aws",
+        "technologies": [
+          "glue-catalog",
+          "lake-formation"
+        ],
+        "detection_hints": [
+          "glue_catalog",
+          "lakeformation"
+        ]
+      },
+      {
+        "capability_key": "lineage",
+        "platform_key": "gcp",
+        "technologies": [
+          "dataplex-lineage"
+        ],
+        "detection_hints": [
+          "lineage"
+        ]
+      },
+      {
+        "capability_key": "lineage",
+        "platform_key": "neutral",
+        "technologies": [
+          "dbt-manifest",
+          "openlineage"
+        ],
+        "detection_hints": [
+          "manifest.json",
+          "openlineage",
+          "ref("
+        ]
+      },
+      {
+        "capability_key": "governance",
+        "platform_key": "gcp",
+        "technologies": [
+          "dataplex",
+          "policy-tags"
+        ],
+        "detection_hints": [
+          "policy_tag",
+          "dataplex"
+        ]
+      },
+      {
+        "capability_key": "governance",
+        "platform_key": "aws",
+        "technologies": [
+          "lake-formation"
+        ],
+        "detection_hints": [
+          "lakeformation"
+        ]
+      },
+      {
+        "capability_key": "security",
+        "platform_key": "gcp",
+        "technologies": [
+          "iam",
+          "kms",
+          "secret-manager"
+        ],
+        "detection_hints": [
+          "service_account",
+          "roles/",
+          "secretmanager"
+        ]
+      },
+      {
+        "capability_key": "security",
+        "platform_key": "aws",
+        "technologies": [
+          "iam",
+          "kms",
+          "secrets-manager"
+        ],
+        "detection_hints": [
+          "iam_role",
+          "secretsmanager"
+        ]
+      },
+      {
+        "capability_key": "monitoring",
+        "platform_key": "gcp",
+        "technologies": [
+          "cloud-logging",
+          "cloud-monitoring"
+        ],
+        "detection_hints": [
+          "stackdriver",
+          "cloud logging"
+        ]
+      },
+      {
+        "capability_key": "monitoring",
+        "platform_key": "aws",
+        "technologies": [
+          "cloudwatch"
+        ],
+        "detection_hints": [
+          "cloudwatch"
+        ]
+      },
+      {
+        "capability_key": "monitoring",
+        "platform_key": "neutral",
+        "technologies": [
+          "prometheus",
+          "grafana"
+        ],
+        "detection_hints": [
+          "prometheus",
+          "grafana"
+        ]
+      },
+      {
+        "capability_key": "cost-management",
+        "platform_key": "gcp",
+        "technologies": [
+          "bigquery-slots",
+          "billing-export"
+        ],
+        "detection_hints": [
+          "slot",
+          "partition by"
+        ]
+      },
+      {
+        "capability_key": "cost-management",
+        "platform_key": "aws",
+        "technologies": [
+          "cost-explorer"
+        ],
+        "detection_hints": [
+          "cost_explorer"
+        ]
+      },
+      {
+        "capability_key": "data-serving",
+        "platform_key": "gcp",
+        "technologies": [
+          "bigquery",
+          "looker"
+        ],
+        "detection_hints": [
+          "bigquery",
+          "looker"
+        ]
+      },
+      {
+        "capability_key": "data-serving",
+        "platform_key": "aws",
+        "technologies": [
+          "redshift",
+          "quicksight"
+        ],
+        "detection_hints": [
+          "redshift",
+          "quicksight"
+        ]
+      },
+      {
+        "capability_key": "data-quality",
+        "platform_key": "neutral",
+        "technologies": [
+          "dbt-tests",
+          "great-expectations",
+          "soda"
+        ],
+        "detection_hints": [
+          "dbt test",
+          "great_expectations",
+          "soda"
+        ]
+      },
+      {
+        "capability_key": "testing",
+        "platform_key": "neutral",
+        "technologies": [
+          "pytest",
+          "dbt-tests"
+        ],
+        "detection_hints": [
+          "pytest",
+          "tests/",
+          "conftest.py"
+        ]
+      },
+      {
+        "capability_key": "regression-testing",
+        "platform_key": "neutral",
+        "technologies": [
+          "pytest",
+          "dbt-snapshot",
+          "reconciliation"
+        ],
+        "detection_hints": [
+          "baseline",
+          "snapshot",
+          "golden"
+        ]
+      },
+      {
+        "capability_key": "impact-analysis",
+        "platform_key": "neutral",
+        "technologies": [
+          "dbt-state",
+          "git-diff",
+          "graph-traversal"
+        ],
+        "detection_hints": [
+          "state:modified",
+          "dbt ls"
+        ]
+      },
+      {
+        "capability_key": "documentation",
+        "platform_key": "neutral",
+        "technologies": [
+          "markdown",
+          "dbt-docs"
+        ],
+        "detection_hints": [
+          "README",
+          "docs/"
+        ]
+      },
+      {
+        "capability_key": "ci-cd",
+        "platform_key": "gcp",
+        "technologies": [
+          "cloud-build"
+        ],
+        "detection_hints": [
+          "cloudbuild.yaml"
+        ]
+      },
+      {
+        "capability_key": "ci-cd",
+        "platform_key": "neutral",
+        "technologies": [
+          "github-actions",
+          "gitlab-ci"
+        ],
+        "detection_hints": [
+          ".github/workflows",
+          ".gitlab-ci.yml"
+        ]
+      },
+      {
+        "capability_key": "infrastructure-as-code",
+        "platform_key": "neutral",
+        "technologies": [
+          "terraform"
+        ],
+        "detection_hints": [
+          ".tf",
+          "terraform"
+        ]
+      }
+    ]
+  },
+  "engineering_responsibilities": {
+    "version": "0.1.0",
+    "engineering_responsibilities": [
+      {
+        "key": "resp.impact-assessment",
+        "name": "Impact Assessment",
+        "statement": "Determine, before a change lands, exactly which assets, pipelines, capabilities and consumers it affects, with evidence for each claim.\n",
+        "required_capabilities": [
+          "impact-analysis",
+          "lineage"
+        ],
+        "required_delivery_capabilities": [
+          "change-assurance"
+        ],
+        "fulfilled_by_roles": [
+          "impact-analysis-engineer"
+        ],
+        "risk_level": "MEDIUM",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.regression-proof",
+        "name": "Regression Proof",
+        "statement": "Prove that a change does not break existing behaviour, by selecting and running the smallest sufficient set of tests.\n",
+        "required_capabilities": [
+          "regression-testing",
+          "testing",
+          "impact-analysis"
+        ],
+        "required_delivery_capabilities": [
+          "regression-assurance"
+        ],
+        "fulfilled_by_roles": [
+          "regression-engineer"
+        ],
+        "risk_level": "MEDIUM",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.data-correctness",
+        "name": "Data Correctness",
+        "statement": "Ensure data is correct, complete and fit for its declared purpose.",
+        "required_capabilities": [
+          "data-quality",
+          "testing"
+        ],
+        "required_delivery_capabilities": [
+          "data-quality-assurance"
+        ],
+        "fulfilled_by_roles": [
+          "data-quality-engineer"
+        ],
+        "risk_level": "MEDIUM",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.logical-data-design",
+        "name": "Logical Data Design",
+        "statement": "Define the logical representation of required data, traceable to business requirements and conformant to enterprise data standards.\n",
+        "required_capabilities": [
+          "data-modelling",
+          "metadata-management"
+        ],
+        "required_delivery_capabilities": [
+          "architecture-assurance"
+        ],
+        "fulfilled_by_roles": [
+          "data-model-engineer",
+          "data-architect"
+        ],
+        "risk_level": "HIGH",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.architecture-integrity",
+        "name": "Architecture Integrity",
+        "statement": "Ensure the solution structure remains coherent and fit for purpose.",
+        "required_capabilities": [
+          "transformation",
+          "lineage",
+          "metadata-management"
+        ],
+        "required_delivery_capabilities": [
+          "architecture-assurance"
+        ],
+        "fulfilled_by_roles": [
+          "data-architect"
+        ],
+        "risk_level": "HIGH",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.architecture-signoff",
+        "name": "Architecture Sign-off",
+        "statement": "Accept, on the organization's behalf, that a design is fit to build. This is an accountability, not a task.\n",
+        "required_capabilities": [],
+        "required_delivery_capabilities": [
+          "architecture-assurance"
+        ],
+        "fulfilled_by_roles": [],
+        "risk_level": "HIGH",
+        "delegable_to_agent": false
+      },
+      {
+        "key": "resp.security-assessment",
+        "name": "Security Assessment",
+        "statement": "Assess data protection and access obligations against the change and produce the evidence a clearance decision needs.\n",
+        "required_capabilities": [
+          "security"
+        ],
+        "required_delivery_capabilities": [
+          "security-assurance"
+        ],
+        "fulfilled_by_roles": [
+          "security-engineer"
+        ],
+        "risk_level": "CRITICAL",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.security-clearance",
+        "name": "Security Clearance",
+        "statement": "Accept, on the organization's behalf, that security obligations are met. An accountability, not a task.\n",
+        "required_capabilities": [],
+        "required_delivery_capabilities": [
+          "security-assurance"
+        ],
+        "fulfilled_by_roles": [],
+        "risk_level": "CRITICAL",
+        "delegable_to_agent": false
+      },
+      {
+        "key": "resp.release-preparation",
+        "name": "Release Preparation",
+        "statement": "Assemble a release with complete evidence and the runbook needed to operate it.\n",
+        "required_capabilities": [
+          "monitoring",
+          "ci-cd"
+        ],
+        "required_delivery_capabilities": [
+          "release-assurance",
+          "operational-readiness"
+        ],
+        "fulfilled_by_roles": [
+          "release-engineer",
+          "sre"
+        ],
+        "risk_level": "HIGH",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.release-readiness",
+        "name": "Release Readiness Sign-off",
+        "statement": "Accept that a release is fit to deploy. An accountability, not a task.\n",
+        "required_capabilities": [],
+        "required_delivery_capabilities": [
+          "release-assurance"
+        ],
+        "fulfilled_by_roles": [],
+        "risk_level": "HIGH",
+        "delegable_to_agent": false
+      },
+      {
+        "key": "resp.documentation-currency",
+        "name": "Documentation Currency",
+        "statement": "Keep human-readable descriptions accurate as the system changes.",
+        "required_capabilities": [
+          "documentation",
+          "metadata-management"
+        ],
+        "required_delivery_capabilities": [
+          "documentation-assurance"
+        ],
+        "fulfilled_by_roles": [
+          "documentation-engineer"
+        ],
+        "risk_level": "LOW",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.requirements-quality",
+        "name": "Requirements Quality",
+        "statement": "Ensure requirements are unambiguous, testable, traceable and cited to a source.\n",
+        "required_capabilities": [],
+        "required_delivery_capabilities": [
+          "requirements-management"
+        ],
+        "fulfilled_by_roles": [
+          "requirements-engineer"
+        ],
+        "risk_level": "MEDIUM",
+        "delegable_to_agent": true
+      },
+      {
+        "key": "resp.feasibility-assessment",
+        "name": "Feasibility Assessment",
+        "statement": "Assess the technical, operational and cost feasibility of a proposed solution before requirements and architecture commit resources to it. Unlike resp.architecture-signoff or resp.release-readiness this carries no non-delegable sign-off twin: the discovery phase has no formal approval gate in this delivery model, so the assessment's GO/NO-GO/ CONDITIONAL verdict is recorded directly on the produced DeliveryArtifact rather than behind a gate. See ADR-0012.\n",
+        "required_capabilities": [],
+        "required_delivery_capabilities": [
+          "feasibility-assessment"
+        ],
+        "fulfilled_by_roles": [
+          "requirements-engineer"
+        ],
+        "risk_level": "MEDIUM",
+        "delegable_to_agent": true
+      }
+    ]
+  },
+  "risk": {
+    "version": "0.1.0",
+    "risk_classes": [
+      {
+        "key": "LOW",
+        "rank": 1,
+        "description": "Reversible, contained, no production or customer impact."
+      },
+      {
+        "key": "MEDIUM",
+        "rank": 2,
+        "description": "Reversible with effort; affects a single system."
+      },
+      {
+        "key": "HIGH",
+        "rank": 3,
+        "description": "Customer-impacting, regulatory, or hard to reverse."
+      },
+      {
+        "key": "CRITICAL",
+        "rank": 4,
+        "description": "Irreversible, or affecting production data or access control."
+      }
+    ],
+    "action_classes": [
+      {
+        "key": "READ_ONLY",
+        "rank": 1,
+        "description": "Observes state without changing anything.",
+        "reversible": true
+      },
+      {
+        "key": "LOW_RISK_WRITE",
+        "rank": 2,
+        "description": "Creates isolated, easily discarded artifacts -- a branch, a comment, a draft.",
+        "reversible": true
+      },
+      {
+        "key": "HIGH_RISK_WRITE",
+        "rank": 3,
+        "description": "Changes shared state -- merging code, altering a schema.",
+        "reversible": false
+      },
+      {
+        "key": "DESTRUCTIVE",
+        "rank": 4,
+        "description": "Deletes or overwrites data, or changes access control.",
+        "reversible": false
+      }
+    ],
+    "approval_matrix": {
+      "ASSISTED": {
+        "READ_ONLY": "NONE",
+        "LOW_RISK_WRITE": "NONE",
+        "HIGH_RISK_WRITE": "SINGLE_REVIEWER",
+        "DESTRUCTIVE": "MAKER_CHECKER"
+      },
+      "SUPERVISED_AUTONOMOUS": {
+        "READ_ONLY": "NONE",
+        "LOW_RISK_WRITE": "SAMPLED_QA",
+        "HIGH_RISK_WRITE": "SINGLE_REVIEWER",
+        "DESTRUCTIVE": "MAKER_CHECKER"
+      },
+      "AUTONOMOUS": {
+        "READ_ONLY": "NONE",
+        "LOW_RISK_WRITE": "NONE",
+        "HIGH_RISK_WRITE": "SINGLE_REVIEWER",
+        "DESTRUCTIVE": "MAKER_CHECKER"
+      }
+    },
+    "examples": [
+      {
+        "action": "read metadata",
+        "action_class": "READ_ONLY",
+        "expected_approval": "NONE"
+      },
+      {
+        "action": "generate test",
+        "action_class": "LOW_RISK_WRITE",
+        "expected_approval": "NONE"
+      },
+      {
+        "action": "create branch",
+        "action_class": "LOW_RISK_WRITE",
+        "expected_approval": "NONE"
+      },
+      {
+        "action": "create pull request",
+        "action_class": "LOW_RISK_WRITE",
+        "expected_approval": "NONE"
+      },
+      {
+        "action": "merge code",
+        "action_class": "HIGH_RISK_WRITE",
+        "expected_approval": "SINGLE_REVIEWER"
+      },
+      {
+        "action": "production deployment",
+        "action_class": "HIGH_RISK_WRITE",
+        "expected_approval": "SINGLE_REVIEWER"
+      },
+      {
+        "action": "drop table",
+        "action_class": "DESTRUCTIVE",
+        "expected_approval": "MAKER_CHECKER"
+      }
+    ],
+    "delivery_process_kinds": [
+      {
+        "key": "release",
+        "name": "Release Process",
+        "description": "How a change reaches production."
+      },
+      {
+        "key": "change",
+        "name": "Change Process",
+        "description": "How a change is raised, assessed and approved."
+      },
+      {
+        "key": "incident",
+        "name": "Incident Process",
+        "description": "How a production failure is handled and learned from."
+      },
+      {
+        "key": "problem",
+        "name": "Problem Process",
+        "description": "How recurring incidents are addressed at root cause."
+      },
+      {
+        "key": "onboarding",
+        "name": "Onboarding Process",
+        "description": "How a new data source or consumer joins the platform."
+      }
+    ]
+  },
+  "delivery_roles": {
+    "version": "0.1.0",
+    "delivery_roles": [
+      {
+        "key": "data-architect",
+        "name": "Data Architect",
+        "responsibilities": [
+          "resp.architecture-integrity",
+          "resp.logical-data-design",
+          "resp.architecture-signoff"
+        ],
+        "approves_gates": [
+          "gate.data-architecture-review",
+          "gate.architecture-review"
+        ],
+        "accountable_for_tasks": [
+          "task.logical-data-model",
+          "task.solution-architecture",
+          "task.conceptual-model"
+        ],
+        "is_segregated": false
+      },
+      {
+        "key": "solution-architect",
+        "name": "Solution Architect",
+        "responsibilities": [
+          "resp.architecture-integrity",
+          "resp.architecture-signoff"
+        ],
+        "approves_gates": [
+          "gate.architecture-review",
+          "gate.release-readiness"
+        ],
+        "accountable_for_tasks": [
+          "task.solution-architecture"
+        ],
+        "is_segregated": false
+      },
+      {
+        "key": "data-engineer",
+        "name": "Data Engineer",
+        "responsibilities": [
+          "resp.data-correctness",
+          "resp.regression-proof"
+        ],
+        "approves_gates": [],
+        "accountable_for_tasks": [
+          "task.build-pipeline",
+          "task.unit-test"
+        ],
+        "is_segregated": false
+      },
+      {
+        "key": "test-lead",
+        "name": "Test Lead",
+        "responsibilities": [
+          "resp.regression-proof",
+          "resp.impact-assessment"
+        ],
+        "approves_gates": [
+          "gate.test-readiness"
+        ],
+        "accountable_for_tasks": [
+          "task.regression-test",
+          "task.test-strategy"
+        ],
+        "is_segregated": true,
+        "incompatible_with": [
+          "data-engineer"
+        ]
+      },
+      {
+        "key": "security-architect",
+        "name": "Security Architect",
+        "responsibilities": [
+          "resp.security-assessment",
+          "resp.security-clearance"
+        ],
+        "approves_gates": [
+          "gate.release-readiness",
+          "gate.security-review"
+        ],
+        "accountable_for_tasks": [
+          "task.security-assessment"
+        ],
+        "is_segregated": true,
+        "incompatible_with": [
+          "data-engineer"
+        ]
+      },
+      {
+        "key": "release-manager",
+        "name": "Release Manager",
+        "responsibilities": [
+          "resp.release-preparation",
+          "resp.release-readiness"
+        ],
+        "approves_gates": [
+          "gate.release-readiness"
+        ],
+        "accountable_for_tasks": [
+          "task.release-package",
+          "task.operational-runbook"
+        ],
+        "is_segregated": true,
+        "incompatible_with": [
+          "data-engineer"
+        ]
+      },
+      {
+        "key": "business-analyst",
+        "name": "Business Analyst",
+        "responsibilities": [
+          "resp.requirements-quality",
+          "resp.feasibility-assessment"
+        ],
+        "approves_gates": [
+          "gate.requirements-review"
+        ],
+        "accountable_for_tasks": [
+          "task.business-requirements",
+          "task.feasibility-assessment"
+        ],
+        "is_segregated": false
+      },
+      {
+        "key": "data-steward",
+        "name": "Data Steward",
+        "responsibilities": [
+          "resp.data-correctness",
+          "resp.documentation-currency"
+        ],
+        "approves_gates": [],
+        "accountable_for_tasks": [
+          "task.data-quality-rules"
+        ],
+        "is_segregated": false
+      }
+    ]
+  },
+  "engineering_roles": {
+    "version": "0.1.0",
+    "engineering_roles": [
+      {
+        "key": "regression-engineer",
+        "name": "Regression Engineer",
+        "mission": "Guarantee that a change does not silently break existing behaviour, by selecting and running the smallest sufficient set of tests.\n",
+        "responsibilities": [
+          "resp.regression-proof"
+        ],
+        "required_capabilities": [
+          "regression-testing",
+          "impact-analysis",
+          "testing"
+        ],
+        "required_delivery_capabilities": [
+          "regression-assurance"
+        ],
+        "required_skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "impact-analysis",
+          "test-selection",
+          "test-execution"
+        ],
+        "required_tools": [
+          "git",
+          "github",
+          "pytest"
+        ],
+        "required_knowledge": [
+          "project-architecture",
+          "testing-standards"
+        ],
+        "kpis": [
+          "escaped-defect-rate",
+          "test-selection-precision",
+          "mean-time-to-signal"
+        ],
+        "evaluation_criteria": [
+          "Selected tests cover every impacted asset",
+          "False positive rate below threshold",
+          "Selection is explainable against the dependency graph",
+          "Test evidence satisfies the test-readiness gate"
+        ],
+        "minimum_evaluation_score": 0.85,
+        "minimum_delivery_conformance": 0.95,
+        "risk_level": "MEDIUM",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "impact-analysis-engineer",
+        "name": "Impact Analysis Engineer",
+        "mission": "Determine, before a change lands, which assets, capabilities, consumers and delivery obligations it affects, with evidence for each claim.\n",
+        "responsibilities": [
+          "resp.impact-assessment"
+        ],
+        "required_capabilities": [
+          "impact-analysis",
+          "lineage"
+        ],
+        "required_delivery_capabilities": [
+          "change-assurance"
+        ],
+        "required_skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "impact-analysis"
+        ],
+        "required_tools": [
+          "git",
+          "neo4j"
+        ],
+        "required_knowledge": [
+          "project-architecture"
+        ],
+        "kpis": [
+          "impact-recall",
+          "impact-precision",
+          "analysis-latency"
+        ],
+        "evaluation_criteria": [
+          "No impacted asset is missed (recall prioritised over precision)",
+          "Every impact edge carries provenance and confidence",
+          "Delivery obligations are reported alongside technical impact"
+        ],
+        "minimum_evaluation_score": 0.9,
+        "minimum_delivery_conformance": 0.9,
+        "risk_level": "MEDIUM",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "data-quality-engineer",
+        "name": "Data Quality Engineer",
+        "mission": "Ensure data flowing through the project is correct, complete and fit for purpose, and that violations surface before consumers see them.\n",
+        "responsibilities": [
+          "resp.data-correctness"
+        ],
+        "required_capabilities": [
+          "data-quality",
+          "data-profiling",
+          "testing",
+          "metadata-management"
+        ],
+        "required_delivery_capabilities": [
+          "data-quality-assurance"
+        ],
+        "required_skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "data-profiling"
+        ],
+        "required_tools": [
+          "git",
+          "bigquery"
+        ],
+        "required_knowledge": [
+          "enterprise-data-standards",
+          "project-architecture"
+        ],
+        "kpis": [
+          "defect-escape-rate",
+          "assertion-coverage",
+          "false-alarm-rate"
+        ],
+        "evaluation_criteria": [
+          "Findings cite the profiling evidence behind them",
+          "Proposed assertions are executable, not prose"
+        ],
+        "minimum_evaluation_score": 0.85,
+        "minimum_delivery_conformance": 0.9,
+        "risk_level": "MEDIUM",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "data-model-engineer",
+        "name": "Data Model Engineer",
+        "mission": "Produce logical and physical data models traceable to business requirements and conformant to enterprise data standards.\n",
+        "responsibilities": [
+          "resp.logical-data-design"
+        ],
+        "required_capabilities": [
+          "data-modelling",
+          "metadata-management"
+        ],
+        "required_delivery_capabilities": [
+          "architecture-assurance"
+        ],
+        "required_skills": [
+          "conceptual-model-analysis",
+          "logical-model-generation",
+          "traceability-mapping"
+        ],
+        "required_tools": [
+          "modeling-tool",
+          "metadata-platform"
+        ],
+        "required_knowledge": [
+          "enterprise-data-standards",
+          "business-glossary"
+        ],
+        "kpis": [
+          "model-rework-rate",
+          "standard-conformance",
+          "traceability-completeness"
+        ],
+        "evaluation_criteria": [
+          "Every logical entity traces to a business requirement",
+          "Every logical entity has an identified business owner",
+          "Model conforms to enterprise naming standards"
+        ],
+        "minimum_evaluation_score": 0.85,
+        "minimum_delivery_conformance": 0.95,
+        "risk_level": "HIGH",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "delivery-compliance-engineer",
+        "name": "Delivery Compliance Engineer",
+        "mission": "Determine whether a change complies with the organization's delivery model, and report precisely what is missing when it does not.\n",
+        "responsibilities": [
+          "resp.impact-assessment",
+          "resp.requirements-quality"
+        ],
+        "required_capabilities": [
+          "impact-analysis",
+          "governance"
+        ],
+        "required_delivery_capabilities": [
+          "change-assurance",
+          "compliance-assurance",
+          "release-assurance"
+        ],
+        "required_skills": [
+          "delivery-process-discovery",
+          "checklist-validation",
+          "gate-readiness-assessment",
+          "evidence-validation",
+          "traceability-validation"
+        ],
+        "required_tools": [
+          "git",
+          "neo4j"
+        ],
+        "required_knowledge": [
+          "delivery-model",
+          "project-architecture"
+        ],
+        "kpis": [
+          "gate-prediction-accuracy",
+          "false-block-rate",
+          "evidence-completeness"
+        ],
+        "evaluation_criteria": [
+          "Gate readiness matches the human decision that follows it",
+          "Never reports BLOCKED on an advisory-only shortfall",
+          "Every missing item names the control it came from"
+        ],
+        "minimum_evaluation_score": 0.9,
+        "minimum_delivery_conformance": 1.0,
+        "risk_level": "HIGH",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "documentation-engineer",
+        "name": "Documentation Engineer",
+        "mission": "Keep documentation accurate as the system changes.",
+        "responsibilities": [
+          "resp.documentation-currency"
+        ],
+        "required_capabilities": [
+          "documentation",
+          "metadata-management"
+        ],
+        "required_delivery_capabilities": [
+          "documentation-assurance"
+        ],
+        "required_skills": [
+          "repository-discovery"
+        ],
+        "required_tools": [
+          "git",
+          "github"
+        ],
+        "required_knowledge": [
+          "project-architecture"
+        ],
+        "kpis": [
+          "documentation-freshness",
+          "human-acceptance-rate"
+        ],
+        "minimum_evaluation_score": 0.8,
+        "minimum_delivery_conformance": 0.85,
+        "risk_level": "LOW",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "data-architect",
+        "name": "Data Architect",
+        "mission": "Ensure the project's structure remains coherent and fit for purpose.",
+        "responsibilities": [
+          "resp.architecture-integrity",
+          "resp.logical-data-design"
+        ],
+        "required_capabilities": [
+          "transformation",
+          "metadata-management",
+          "lineage",
+          "data-modelling"
+        ],
+        "required_delivery_capabilities": [
+          "architecture-assurance"
+        ],
+        "required_skills": [
+          "repository-discovery",
+          "dependency-analysis",
+          "architecture-review"
+        ],
+        "required_tools": [
+          "git",
+          "neo4j"
+        ],
+        "required_knowledge": [
+          "enterprise-data-standards",
+          "project-architecture"
+        ],
+        "kpis": [
+          "architecture-drift",
+          "review-turnaround"
+        ],
+        "minimum_evaluation_score": 0.85,
+        "minimum_delivery_conformance": 0.95,
+        "risk_level": "HIGH",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "MAKER_CHECKER"
+      },
+      {
+        "key": "security-engineer",
+        "name": "Security Engineer",
+        "mission": "Ensure data protection and access control obligations are met.",
+        "responsibilities": [
+          "resp.security-assessment"
+        ],
+        "required_capabilities": [
+          "security",
+          "governance"
+        ],
+        "required_delivery_capabilities": [
+          "security-assurance"
+        ],
+        "required_skills": [
+          "repository-discovery",
+          "security-assessment"
+        ],
+        "required_tools": [
+          "git"
+        ],
+        "required_knowledge": [
+          "security-standards"
+        ],
+        "kpis": [
+          "unremediated-findings",
+          "time-to-remediate"
+        ],
+        "minimum_evaluation_score": 0.9,
+        "minimum_delivery_conformance": 1.0,
+        "risk_level": "CRITICAL",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "MAKER_CHECKER"
+      },
+      {
+        "key": "release-engineer",
+        "name": "Release Engineer",
+        "mission": "Ensure releases carry complete evidence and pass the readiness gate.",
+        "responsibilities": [
+          "resp.release-preparation"
+        ],
+        "required_capabilities": [
+          "ci-cd",
+          "monitoring"
+        ],
+        "required_delivery_capabilities": [
+          "release-assurance"
+        ],
+        "required_skills": [
+          "evidence-validation",
+          "gate-readiness-assessment"
+        ],
+        "required_tools": [
+          "git",
+          "github"
+        ],
+        "required_knowledge": [
+          "delivery-model"
+        ],
+        "kpis": [
+          "release-failure-rate",
+          "gate-rework-rate"
+        ],
+        "minimum_evaluation_score": 0.85,
+        "minimum_delivery_conformance": 1.0,
+        "risk_level": "HIGH",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "MAKER_CHECKER"
+      },
+      {
+        "key": "sre",
+        "name": "Site Reliability Engineer",
+        "mission": "Ensure what is released can be run, monitored and recovered.",
+        "responsibilities": [
+          "resp.release-preparation"
+        ],
+        "required_capabilities": [
+          "monitoring"
+        ],
+        "required_delivery_capabilities": [
+          "operational-readiness"
+        ],
+        "required_skills": [
+          "repository-discovery"
+        ],
+        "required_tools": [
+          "git"
+        ],
+        "required_knowledge": [
+          "project-architecture"
+        ],
+        "kpis": [
+          "mttr",
+          "alert-precision"
+        ],
+        "minimum_evaluation_score": 0.85,
+        "minimum_delivery_conformance": 0.9,
+        "risk_level": "HIGH",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "requirements-engineer",
+        "name": "Requirements Engineer",
+        "mission": "Produce unambiguous, testable, traceable, cited requirements, and assess the feasibility of proposed solutions before they are committed to.\n",
+        "responsibilities": [
+          "resp.requirements-quality",
+          "resp.feasibility-assessment"
+        ],
+        "required_capabilities": [
+          "documentation"
+        ],
+        "required_delivery_capabilities": [
+          "requirements-management",
+          "feasibility-assessment"
+        ],
+        "required_skills": [
+          "traceability-mapping",
+          "feasibility-analysis"
+        ],
+        "required_tools": [
+          "git"
+        ],
+        "required_knowledge": [
+          "business-glossary"
+        ],
+        "kpis": [
+          "requirement-rework-rate",
+          "traceability-completeness",
+          "feasibility-accuracy"
+        ],
+        "evaluation_criteria": [
+          "Feasibility verdicts are traceable to evidence, not opinion",
+          "GO verdicts do not omit known technical or cost risk"
+        ],
+        "minimum_evaluation_score": 0.85,
+        "minimum_delivery_conformance": 0.9,
+        "risk_level": "MEDIUM",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "SINGLE_REVIEWER"
+      },
+      {
+        "key": "governance-engineer",
+        "name": "Governance Engineer",
+        "mission": "Ensure regulatory controls are implemented and demonstrable.",
+        "responsibilities": [
+          "resp.requirements-quality"
+        ],
+        "required_capabilities": [
+          "governance",
+          "metadata-management"
+        ],
+        "required_delivery_capabilities": [
+          "compliance-assurance"
+        ],
+        "required_skills": [
+          "evidence-validation"
+        ],
+        "required_tools": [
+          "git"
+        ],
+        "required_knowledge": [
+          "delivery-model"
+        ],
+        "kpis": [
+          "control-coverage",
+          "audit-finding-rate"
+        ],
+        "minimum_evaluation_score": 0.9,
+        "minimum_delivery_conformance": 1.0,
+        "risk_level": "CRITICAL",
+        "automation_level": "ASSISTED",
+        "default_approval_level": "MAKER_CHECKER"
+      }
+    ]
+  },
+  "skills": {
+    "version": "0.1.0",
+    "skills": [
+      {
+        "key": "repository-discovery",
+        "name": "Repository Discovery",
+        "required_tools": [
+          "git"
+        ],
+        "outputs": {
+          "repo_index": "path -> discovered entity map"
+        },
+        "risk_level": "LOW",
+        "deterministic": true
+      },
+      {
+        "key": "dependency-analysis",
+        "name": "Dependency Analysis",
+        "dependencies": [
+          "repository-discovery"
+        ],
+        "required_tools": [
+          "git"
+        ],
+        "risk_level": "LOW"
+      },
+      {
+        "key": "impact-analysis",
+        "name": "Impact Analysis",
+        "dependencies": [
+          "dependency-analysis"
+        ],
+        "required_tools": [
+          "git",
+          "neo4j"
+        ],
+        "risk_level": "MEDIUM"
+      },
+      {
+        "key": "test-selection",
+        "name": "Test Selection",
+        "dependencies": [
+          "impact-analysis"
+        ],
+        "required_tools": [
+          "git",
+          "pytest"
+        ],
+        "discharges_checklist_items": [
+          "TST-01"
+        ]
+      },
+      {
+        "key": "test-execution",
+        "name": "Test Execution",
+        "required_tools": [
+          "pytest"
+        ],
+        "discharges_checklist_items": [
+          "TST-02"
+        ],
+        "risk_level": "MEDIUM"
+      },
+      {
+        "key": "data-profiling",
+        "name": "Data Profiling",
+        "required_tools": [
+          "bigquery"
+        ],
+        "outputs": {
+          "profile": "DataProfile-shaped statistics"
+        }
+      },
+      {
+        "key": "conceptual-model-analysis",
+        "name": "Conceptual Model Analysis",
+        "required_knowledge": [
+          "business-glossary"
+        ]
+      },
+      {
+        "key": "logical-model-generation",
+        "name": "Logical Model Generation",
+        "dependencies": [
+          "conceptual-model-analysis"
+        ],
+        "required_tools": [
+          "modeling-tool",
+          "metadata-platform"
+        ],
+        "required_knowledge": [
+          "enterprise-data-standards",
+          "business-glossary"
+        ],
+        "discharges_checklist_items": [
+          "LMC-03",
+          "LMC-04",
+          "LMC-05",
+          "LMC-06"
+        ]
+      },
+      {
+        "key": "traceability-mapping",
+        "name": "Traceability Mapping",
+        "required_knowledge": [
+          "business-glossary"
+        ],
+        "discharges_checklist_items": [
+          "LMC-07"
+        ]
+      },
+      {
+        "key": "delivery-process-discovery",
+        "name": "Delivery Process Discovery",
+        "required_tools": [
+          "git"
+        ],
+        "required_knowledge": [
+          "delivery-model"
+        ]
+      },
+      {
+        "key": "checklist-validation",
+        "name": "Checklist Validation",
+        "required_knowledge": [
+          "delivery-model"
+        ]
+      },
+      {
+        "key": "gate-readiness-assessment",
+        "name": "Gate Readiness Assessment",
+        "dependencies": [
+          "checklist-validation"
+        ],
+        "required_tools": [
+          "neo4j"
+        ],
+        "required_knowledge": [
+          "delivery-model"
+        ]
+      },
+      {
+        "key": "evidence-validation",
+        "name": "Evidence Validation",
+        "required_knowledge": [
+          "delivery-model"
+        ]
+      },
+      {
+        "key": "traceability-validation",
+        "name": "Traceability Validation",
+        "required_tools": [
+          "neo4j"
+        ],
+        "required_knowledge": [
+          "delivery-model"
+        ]
+      }
+    ]
+  },
+  "delivery_capabilities": {
+    "version": "0.1.0",
+    "delivery_capabilities": [
+      {
+        "key": "requirements-management",
+        "name": "Requirements Management",
+        "category": "definition",
+        "description": "Requirements are captured, traceable and testable.",
+        "evidenced_by": [
+          "requirement_entities",
+          "traceability_edges",
+          "acceptance_criteria"
+        ],
+        "realized_by_roles": [
+          "requirements-engineer"
+        ]
+      },
+      {
+        "key": "feasibility-assessment",
+        "name": "Feasibility Assessment",
+        "category": "definition",
+        "description": "A proposed solution's technical, operational and cost feasibility is assessed before requirements and architecture commit resources to it.\n",
+        "evidenced_by": [
+          "feasibility_artifact",
+          "feasibility_checklist"
+        ],
+        "realized_by_roles": [
+          "requirements-engineer",
+          "data-architect"
+        ]
+      },
+      {
+        "key": "architecture-assurance",
+        "name": "Architecture Assurance",
+        "category": "design",
+        "description": "Solution and data architecture are reviewed before build.",
+        "evidenced_by": [
+          "architecture_gate",
+          "architecture_checklist",
+          "architecture_artifact"
+        ],
+        "realized_by_roles": [
+          "data-architect"
+        ]
+      },
+      {
+        "key": "change-assurance",
+        "name": "Change Assurance",
+        "category": "control",
+        "description": "Every change is impact-assessed, tested and approved proportionately.",
+        "evidenced_by": [
+          "change_process",
+          "impact_analysis",
+          "approval_gate"
+        ],
+        "realized_by_roles": [
+          "impact-analysis-engineer",
+          "regression-engineer"
+        ]
+      },
+      {
+        "key": "regression-assurance",
+        "name": "Regression Assurance",
+        "category": "control",
+        "description": "Changes are proven not to break existing behaviour.",
+        "evidenced_by": [
+          "regression_tests",
+          "test_evidence",
+          "test_gate"
+        ],
+        "realized_by_roles": [
+          "regression-engineer"
+        ]
+      },
+      {
+        "key": "data-quality-assurance",
+        "name": "Data Quality Assurance",
+        "category": "control",
+        "description": "Data correctness is asserted and violations surface before consumers see them.",
+        "evidenced_by": [
+          "quality_checklist",
+          "quality_evidence"
+        ],
+        "realized_by_roles": [
+          "data-quality-engineer"
+        ]
+      },
+      {
+        "key": "security-assurance",
+        "name": "Security Assurance",
+        "category": "control",
+        "description": "Security obligations are assessed and evidenced before release.",
+        "evidenced_by": [
+          "security_gate",
+          "security_assessment_evidence"
+        ],
+        "realized_by_roles": [
+          "security-engineer"
+        ]
+      },
+      {
+        "key": "compliance-assurance",
+        "name": "Compliance Assurance",
+        "category": "control",
+        "description": "Regulatory controls are implemented and demonstrable to an auditor.",
+        "evidenced_by": [
+          "controls",
+          "control_evidence",
+          "retention_policy"
+        ],
+        "realized_by_roles": [
+          "governance-engineer"
+        ]
+      },
+      {
+        "key": "release-assurance",
+        "name": "Release Assurance",
+        "category": "release",
+        "description": "Releases pass a readiness gate with complete evidence.",
+        "evidenced_by": [
+          "release_process",
+          "release_gate",
+          "release_checklist"
+        ],
+        "realized_by_roles": [
+          "release-engineer"
+        ]
+      },
+      {
+        "key": "operational-readiness",
+        "name": "Operational Readiness",
+        "category": "release",
+        "description": "What is released can be run, monitored and recovered.",
+        "evidenced_by": [
+          "runbook_artifact",
+          "monitoring_evidence",
+          "incident_process"
+        ],
+        "realized_by_roles": [
+          "sre"
+        ]
+      },
+      {
+        "key": "documentation-assurance",
+        "name": "Documentation Assurance",
+        "category": "delivery",
+        "description": "Documentation stays accurate as the system changes.",
+        "evidenced_by": [
+          "documentation_artifact",
+          "documentation_checklist"
+        ],
+        "realized_by_roles": [
+          "documentation-engineer"
+        ]
+      }
+    ]
+  },
+  "relationship_types": {
+    "version": "0.1.0",
+    "relationship_types": [
+      {
+        "key": "CONTAINS",
+        "description": "Structural containment -- project to asset, table to column.",
+        "source_types": [
+          "Project",
+          "Repository",
+          "DataAsset",
+          "Workflow"
+        ],
+        "target_types": [
+          "Repository",
+          "CodeArtifact",
+          "DataAsset",
+          "Pipeline",
+          "Test",
+          "Task",
+          "Infrastructure"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "DEPENDS_ON",
+        "description": "A pipeline reads an asset, or an asset derives from another. The most important inferred edge in the graph -- impact analysis walks it.\n",
+        "source_types": [
+          "Pipeline",
+          "DataAsset",
+          "Test",
+          "CodeArtifact",
+          "CloudResource"
+        ],
+        "target_types": [
+          "DataAsset",
+          "Pipeline",
+          "CodeArtifact",
+          "CloudResource"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "PRODUCES",
+        "source_types": [
+          "Pipeline",
+          "Task"
+        ],
+        "target_types": [
+          "DataAsset",
+          "Artifact"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "COVERS",
+        "description": "A test protects an asset or pipeline. Drives impact-aware test selection.",
+        "source_types": [
+          "Test"
+        ],
+        "target_types": [
+          "DataAsset",
+          "Pipeline",
+          "CodeArtifact",
+          "Requirement"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "HAS_SCHEMA",
+        "source_types": [
+          "DataAsset"
+        ],
+        "target_types": [
+          "SchemaDefinition"
+        ],
+        "cardinality": "one",
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "PROFILES",
+        "description": "A profiling result measured against a data asset at a point in time.",
+        "source_types": [
+          "DataProfile"
+        ],
+        "target_types": [
+          "DataAsset"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "IMPLEMENTS",
+        "description": "Concrete technology realizing an architecture element.",
+        "source_types": [
+          "Pipeline",
+          "CloudResource",
+          "CodeArtifact",
+          "Infrastructure"
+        ],
+        "target_types": [
+          "ArchitectureElement"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "MANAGES",
+        "source_types": [
+          "Infrastructure"
+        ],
+        "target_types": [
+          "CloudResource"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "IMPACTS",
+        "description": "A change affects part of the technical twin. Usually INFERRED.",
+        "source_types": [
+          "Change"
+        ],
+        "target_types": [
+          "Pipeline",
+          "DataAsset",
+          "Test",
+          "CodeArtifact",
+          "Capability",
+          "ArchitectureElement"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "AFFECTED_BY",
+        "source_types": [
+          "Pipeline",
+          "DataAsset",
+          "Project"
+        ],
+        "target_types": [
+          "Incident"
+        ],
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "HAS_PHASE",
+        "source_types": [
+          "DeliveryModel",
+          "DeliveryProcess"
+        ],
+        "target_types": [
+          "DeliveryPhase"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "PRECEDES",
+        "description": "Phase ordering. The registry validator checks this graph is acyclic.",
+        "source_types": [
+          "DeliveryPhase"
+        ],
+        "target_types": [
+          "DeliveryPhase"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "HAS_TASK",
+        "source_types": [
+          "DeliveryPhase"
+        ],
+        "target_types": [
+          "DeliveryTask"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "HAS_ACTIVITY",
+        "source_types": [
+          "DeliveryTask"
+        ],
+        "target_types": [
+          "DeliveryActivity"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "REQUIRES_INPUT",
+        "source_types": [
+          "DeliveryTask",
+          "DeliveryPhase",
+          "DeliveryContract"
+        ],
+        "target_types": [
+          "DeliveryInput"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "PRODUCES_OUTPUT",
+        "source_types": [
+          "DeliveryTask",
+          "DeliveryPhase",
+          "DeliveryContract"
+        ],
+        "target_types": [
+          "DeliveryOutput"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "SATISFIED_BY",
+        "description": "An input or output specification satisfied by a concrete artifact.",
+        "source_types": [
+          "DeliveryInput",
+          "DeliveryOutput"
+        ],
+        "target_types": [
+          "DeliveryArtifact"
+        ],
+        "requires_provenance": true,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "VALIDATED_BY",
+        "description": "A task or phase validated by a checklist.",
+        "source_types": [
+          "DeliveryTask",
+          "DeliveryPhase",
+          "DeliveryOutput",
+          "DeliveryContract"
+        ],
+        "target_types": [
+          "Checklist"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "HAS_ITEM",
+        "source_types": [
+          "Checklist"
+        ],
+        "target_types": [
+          "ChecklistItem"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "JUDGED_BY",
+        "description": "An output judged against an acceptance criterion.",
+        "source_types": [
+          "DeliveryTask",
+          "DeliveryOutput",
+          "DeliveryArtifact",
+          "DeliveryContract"
+        ],
+        "target_types": [
+          "AcceptanceCriterion"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "ENDS_AT_GATE",
+        "source_types": [
+          "DeliveryPhase",
+          "DeliveryTask",
+          "DeliveryProcess",
+          "DeliveryContract"
+        ],
+        "target_types": [
+          "ApprovalGate"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "HAS_RULE",
+        "source_types": [
+          "ApprovalGate"
+        ],
+        "target_types": [
+          "ApprovalRule"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "REQUIRES_EVIDENCE",
+        "source_types": [
+          "ApprovalGate",
+          "DeliveryTask",
+          "DeliveryOutput",
+          "Control",
+          "DeliveryContract"
+        ],
+        "target_types": [
+          "EvidenceRequirement"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "APPROVED_AT",
+        "source_types": [
+          "Approval"
+        ],
+        "target_types": [
+          "ApprovalGate"
+        ],
+        "cardinality": "one",
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "CONFORMS_TO",
+        "description": "Work must conform to a standard or definition of done.",
+        "source_types": [
+          "DeliveryTask",
+          "DeliveryArtifact",
+          "DeliveryOutput",
+          "Pipeline",
+          "CodeArtifact"
+        ],
+        "target_types": [
+          "Standard",
+          "DefinitionOfDone"
+        ],
+        "requires_provenance": true,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "IMPLEMENTS_CONTROL",
+        "description": "A task or gate implements a governance control.",
+        "source_types": [
+          "DeliveryTask",
+          "ApprovalGate",
+          "Checklist",
+          "Test"
+        ],
+        "target_types": [
+          "Control"
+        ],
+        "requires_provenance": true,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "SHAPED_BY",
+        "source_types": [
+          "DeliveryArtifact",
+          "DeliveryOutput"
+        ],
+        "target_types": [
+          "Template"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "FOLLOWS_METHODOLOGY",
+        "source_types": [
+          "DeliveryModel"
+        ],
+        "target_types": [
+          "Methodology"
+        ],
+        "cardinality": "one",
+        "requires_provenance": true,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "ASSIGNED",
+        "description": "RACI assignment of a delivery role to a task, phase or gate.",
+        "source_types": [
+          "RaciAssignment"
+        ],
+        "target_types": [
+          "DeliveryTask",
+          "DeliveryPhase",
+          "ApprovalGate"
+        ],
+        "requires_provenance": true,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "BINDS",
+        "description": "A delivery contract binds everything one task needs.",
+        "source_types": [
+          "DeliveryContract"
+        ],
+        "target_types": [
+          "DeliveryTask"
+        ],
+        "cardinality": "one",
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "WAIVED_BY",
+        "source_types": [
+          "ChecklistItem",
+          "AcceptanceCriterion"
+        ],
+        "target_types": [
+          "Approval"
+        ],
+        "requires_provenance": false,
+        "dimension": "DELIVERY"
+      },
+      {
+        "key": "GOVERNED_BY_MODEL",
+        "description": "A project is governed by a delivery model. The top-level join.",
+        "source_types": [
+          "Project"
+        ],
+        "target_types": [
+          "DeliveryModel"
+        ],
+        "cardinality": "one",
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "DESCRIBES",
+        "description": "A delivery artifact documents technical reality. Almost always INFERRED, and the confidence matters: acting on a low-confidence DESCRIBES edge means telling someone to update a document that was never about their code.\n",
+        "source_types": [
+          "DeliveryArtifact"
+        ],
+        "target_types": [
+          "Pipeline",
+          "DataAsset",
+          "ArchitectureElement",
+          "Infrastructure",
+          "CodeArtifact"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "GOVERNS",
+        "description": "Which delivery task owns changes to a technical thing.",
+        "source_types": [
+          "DeliveryTask"
+        ],
+        "target_types": [
+          "Pipeline",
+          "DataAsset",
+          "CodeArtifact",
+          "ArchitectureElement",
+          "Infrastructure"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "TRIGGERS_TASK",
+        "description": "A change creates a delivery obligation. The heart of dual impact analysis.",
+        "source_types": [
+          "Change",
+          "Event",
+          "Incident"
+        ],
+        "target_types": [
+          "DeliveryTask",
+          "DeliveryProcess"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "SATISFIES",
+        "description": "A technical test discharges an organizational evidence requirement.",
+        "source_types": [
+          "Test",
+          "Evidence",
+          "Artifact"
+        ],
+        "target_types": [
+          "EvidenceRequirement"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "TRACED_TO",
+        "description": "A requirement is implemented by a delivery task. Head of the trace chain.",
+        "source_types": [
+          "Requirement",
+          "Problem"
+        ],
+        "target_types": [
+          "DeliveryTask"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "PERFORMED_BY",
+        "source_types": [
+          "DeliveryTask",
+          "Task"
+        ],
+        "target_types": [
+          "Agent",
+          "DeliveryRole"
+        ],
+        "requires_provenance": false,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "PRODUCES_ARTIFACT",
+        "source_types": [
+          "Agent",
+          "Task",
+          "DeliveryTask"
+        ],
+        "target_types": [
+          "DeliveryArtifact"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "VERIFIED_BY",
+        "source_types": [
+          "DeliveryArtifact",
+          "DeliveryOutput"
+        ],
+        "target_types": [
+          "Test"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "SUPPORTS_APPROVAL",
+        "source_types": [
+          "Evidence"
+        ],
+        "target_types": [
+          "Approval"
+        ],
+        "requires_provenance": false,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "AUTHORIZES",
+        "source_types": [
+          "Approval"
+        ],
+        "target_types": [
+          "Deployment"
+        ],
+        "requires_provenance": false,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "ACCOUNTABLE_FOR",
+        "description": "A delivery role is accountable for an engineering responsibility.",
+        "source_types": [
+          "DeliveryRole"
+        ],
+        "target_types": [
+          "EngineeringResponsibility"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "FULFILLED_BY",
+        "description": "A responsibility is fulfilled by an engineering role.",
+        "source_types": [
+          "EngineeringResponsibility"
+        ],
+        "target_types": [
+          "EngineeringRole"
+        ],
+        "requires_provenance": false,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "IMPLEMENTED_BY",
+        "description": "An engineering role is implemented by an agent. The role outlives the agent.",
+        "source_types": [
+          "EngineeringRole"
+        ],
+        "target_types": [
+          "Agent"
+        ],
+        "requires_provenance": false,
+        "dimension": "SHARED"
+      },
+      {
+        "key": "HAS_SKILL",
+        "source_types": [
+          "Agent"
+        ],
+        "target_types": [
+          "Skill"
+        ],
+        "requires_provenance": false,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "USES_TOOL",
+        "source_types": [
+          "Agent",
+          "Skill"
+        ],
+        "target_types": [
+          "Tool"
+        ],
+        "requires_provenance": false,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "CONSUMES_KNOWLEDGE",
+        "source_types": [
+          "Agent",
+          "Skill"
+        ],
+        "target_types": [
+          "KnowledgePack"
+        ],
+        "requires_provenance": false,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "GOVERNED_BY",
+        "source_types": [
+          "Agent",
+          "Tool",
+          "Workflow",
+          "Deployment",
+          "DeliveryTask"
+        ],
+        "target_types": [
+          "Policy"
+        ],
+        "requires_provenance": false,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "PARTICIPATES_IN",
+        "source_types": [
+          "Agent",
+          "EngineeringRole",
+          "DeliveryRole"
+        ],
+        "target_types": [
+          "Workflow"
+        ],
+        "requires_provenance": false,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "REQUIRES",
+        "source_types": [
+          "Problem",
+          "Requirement"
+        ],
+        "target_types": [
+          "Capability",
+          "DeliveryCapability"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "EXHIBITS",
+        "description": "A project demonstrates a capability, evidenced by discovery.",
+        "source_types": [
+          "Project"
+        ],
+        "target_types": [
+          "Capability",
+          "DeliveryCapability"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "REALIZED_BY",
+        "source_types": [
+          "Capability",
+          "DeliveryCapability",
+          "CapabilityGap"
+        ],
+        "target_types": [
+          "EngineeringRole",
+          "EngineeringResponsibility"
+        ],
+        "requires_provenance": false,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "HAS_GAP",
+        "source_types": [
+          "Project"
+        ],
+        "target_types": [
+          "CapabilityGap"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "BOUND_TO",
+        "source_types": [
+          "Capability",
+          "TechnologyBinding"
+        ],
+        "target_types": [
+          "TechnologyBinding",
+          "Platform"
+        ],
+        "requires_provenance": false,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "TARGETS_PLATFORM",
+        "source_types": [
+          "Project"
+        ],
+        "target_types": [
+          "Platform"
+        ],
+        "cardinality": "one",
+        "requires_provenance": true,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "EVALUATES",
+        "source_types": [
+          "Evaluation",
+          "EvaluationSuite"
+        ],
+        "target_types": [
+          "Agent",
+          "Skill",
+          "Workflow",
+          "Project",
+          "DeliveryContract"
+        ],
+        "requires_provenance": false,
+        "dimension": "SHARED"
+      },
+      {
+        "key": "GENERATES",
+        "source_types": [
+          "Task",
+          "DeliveryTask",
+          "Evaluation",
+          "Observation",
+          "Test"
+        ],
+        "target_types": [
+          "Evidence"
+        ],
+        "requires_provenance": false,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "SUPPORTS",
+        "description": "Evidence underpins a finding, decision or evaluation.",
+        "source_types": [
+          "Evidence"
+        ],
+        "target_types": [
+          "Finding",
+          "Decision",
+          "Evaluation",
+          "Capability",
+          "DeliveryCapability",
+          "CapabilityGap"
+        ],
+        "requires_provenance": false,
+        "dimension": "SHARED"
+      },
+      {
+        "key": "DECIDED",
+        "source_types": [
+          "Agent",
+          "Decision"
+        ],
+        "target_types": [
+          "Finding",
+          "Change",
+          "Artifact",
+          "DeliveryArtifact"
+        ],
+        "requires_provenance": false,
+        "dimension": "SHARED"
+      },
+      {
+        "key": "DEPLOYS",
+        "source_types": [
+          "Deployment"
+        ],
+        "target_types": [
+          "Agent",
+          "Pipeline"
+        ],
+        "cardinality": "one",
+        "requires_provenance": false,
+        "dimension": "TECHNICAL"
+      },
+      {
+        "key": "UPDATES",
+        "description": "An observation proposes a correction to a twin or to knowledge.",
+        "source_types": [
+          "Observation"
+        ],
+        "target_types": [
+          "Project",
+          "DataAsset",
+          "Pipeline",
+          "KnowledgePack",
+          "Capability",
+          "DeliveryModel",
+          "DeliveryTask"
+        ],
+        "requires_provenance": true,
+        "dimension": "CROSS"
+      },
+      {
+        "key": "ASSEMBLED_FROM",
+        "source_types": [
+          "ContextBundle"
+        ],
+        "target_types": [
+          "ContextItem"
+        ],
+        "requires_provenance": false,
+        "dimension": "SHARED"
+      },
+      {
+        "key": "CITES",
+        "source_types": [
+          "Decision",
+          "Finding",
+          "ContextItem",
+          "Approval"
+        ],
+        "target_types": [
+          "ContextBundle",
+          "Evidence",
+          "KnowledgePack",
+          "Standard"
+        ],
+        "requires_provenance": false,
+        "dimension": "SHARED"
+      }
+    ]
+  }
+}

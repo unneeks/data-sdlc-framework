@@ -1,0 +1,188 @@
+[
+  {
+    "id": "DATA_PLATFORM_MIGRATION",
+    "name": "Data Platform / Warehouse Migration",
+    "description": "Migrate workloads, pipelines, and data assets from legacy data warehouse to modern cloud lakehouse.",
+    "business_purpose": "Enterprise data platform modernization & cost reduction",
+    "baseline_risk": "HIGH",
+    "phases_count": 9,
+    "tasks_count": 18,
+    "default_agents": [
+      "Migration Architect Agent",
+      "Source Discovery Agent",
+      "Dependency Analysis Agent",
+      "Mapping Agent",
+      "Pipeline Migration Agent",
+      "Data Reconciliation Agent",
+      "Regression Agent",
+      "Delivery Compliance Agent"
+    ],
+    "required_skills": [
+      "source-discovery",
+      "dependency-analysis",
+      "schema-mapping",
+      "data-reconciliation",
+      "cutover-planning"
+    ]
+  },
+  {
+    "id": "DATA_PRODUCT_NEW",
+    "name": "New Data Product",
+    "description": "Create a brand new data product from discovery to operational deployment.",
+    "business_purpose": "Unlock new data capabilities and business value",
+    "baseline_risk": "MEDIUM",
+    "phases_count": 8,
+    "tasks_count": 16,
+    "default_agents": [
+      "Requirements Agent",
+      "Data Product Architect Agent",
+      "Data Modeling Agent",
+      "Pipeline Agent",
+      "Data Quality Agent",
+      "Security Agent",
+      "Operational Readiness Agent"
+    ],
+    "required_skills": [
+      "requirement-extraction",
+      "conceptual-modeling",
+      "schema-design",
+      "quality-rule-definition"
+    ]
+  },
+  {
+    "id": "DATA_PRODUCT_AMENDMENT",
+    "name": "Data Product Amendment",
+    "description": "Modify an existing data product attribute, transformation, calculation, or contract.",
+    "business_purpose": "Enhance existing data assets for evolving business needs",
+    "baseline_risk": "MEDIUM",
+    "phases_count": 5,
+    "tasks_count": 10,
+    "default_agents": [
+      "Change Analysis Agent",
+      "Impact Analysis Agent",
+      "Data Contract Agent",
+      "Regression Agent",
+      "Delivery Compliance Agent"
+    ],
+    "required_skills": [
+      "impact-analysis",
+      "schema-diff",
+      "contract-validation",
+      "regression-testing"
+    ]
+  },
+  {
+    "id": "DATA_PRODUCT_DEFECT",
+    "name": "Defect / Remediation",
+    "description": "Remediate data quality failure, broken calculation, or pipeline fault in a data product.",
+    "business_purpose": "Restore business data accuracy & SLA adherence",
+    "baseline_risk": "MEDIUM",
+    "phases_count": 4,
+    "tasks_count": 8,
+    "default_agents": [
+      "Incident Analysis Agent",
+      "Test Failure Analysis Agent",
+      "Data Quality Agent",
+      "Regression Agent"
+    ],
+    "required_skills": [
+      "root-cause-analysis",
+      "failure-classification",
+      "remediation-verification"
+    ]
+  },
+  {
+    "id": "NEW_DATA_SOURCE_ONBOARDING",
+    "name": "New Data Source Onboarding",
+    "description": "Onboard a new raw ingestion source stream or external database feed.",
+    "business_purpose": "Expand data domain ingestion footprint",
+    "baseline_risk": "MEDIUM",
+    "phases_count": 6,
+    "tasks_count": 12,
+    "default_agents": [
+      "Source Assessment Agent",
+      "Security Agent",
+      "Pipeline Agent",
+      "Data Quality Agent"
+    ],
+    "required_skills": [
+      "source-discovery",
+      "schema-extraction",
+      "security-classification"
+    ]
+  },
+  {
+    "id": "DATA_SOURCE_CHANGE",
+    "name": "Data Source Change",
+    "description": "Handle schema, data type, or format updates from an upstream source system.",
+    "business_purpose": "Maintain pipeline stability against upstream changes",
+    "baseline_risk": "MEDIUM",
+    "phases_count": 5,
+    "tasks_count": 9,
+    "default_agents": [
+      "Impact Analysis Agent",
+      "Schema Validation Agent",
+      "Regression Agent"
+    ],
+    "required_skills": [
+      "schema-diff",
+      "downstream-impact-analysis"
+    ]
+  },
+  {
+    "id": "DATA_PRODUCT_RETIREMENT",
+    "name": "Data Product Retirement",
+    "description": "Decommission and retire an obsolete data product safely without breaking downstream dependencies.",
+    "business_purpose": "Reduce technical debt and maintenance overhead",
+    "baseline_risk": "HIGH",
+    "phases_count": 5,
+    "tasks_count": 10,
+    "default_agents": [
+      "Dependency Analysis Agent",
+      "Governance Agent",
+      "Decommission Agent"
+    ],
+    "required_skills": [
+      "consumer-discovery",
+      "dependency-analysis",
+      "decommission-verification"
+    ]
+  },
+  {
+    "id": "REGULATORY_POLICY_CHANGE",
+    "name": "Regulatory / Policy Change",
+    "description": "Implement compliance or privacy modifications (e.g. GDPR, retention policies).",
+    "business_purpose": "Ensure regulatory compliance & risk mitigation",
+    "baseline_risk": "HIGH",
+    "phases_count": 5,
+    "tasks_count": 11,
+    "default_agents": [
+      "Governance Agent",
+      "Security Agent",
+      "Compliance Audit Agent"
+    ],
+    "required_skills": [
+      "compliance-audit",
+      "data-classification",
+      "policy-enforcement"
+    ]
+  },
+  {
+    "id": "PLATFORM_MODERNIZATION",
+    "name": "Platform Modernization",
+    "description": "Upgrade underlying execution frameworks (e.g. legacy ETL to Spark/dbt).",
+    "business_purpose": "Upgrade software engineering stack & execution speed",
+    "baseline_risk": "MEDIUM",
+    "phases_count": 6,
+    "tasks_count": 12,
+    "default_agents": [
+      "Architecture Agent",
+      "Pipeline Migration Agent",
+      "Regression Agent"
+    ],
+    "required_skills": [
+      "pipeline-modernization",
+      "performance-benchmarking"
+    ]
+  }
+]

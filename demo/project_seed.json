@@ -1,0 +1,24 @@
+{
+  "project": {
+    "id": "P-C360",
+    "name": "Customer 360 Data Platform",
+    "description": "Enterprise customer domain platform processing SAP, Oracle, and Salesforce CRM feeds into BigQuery DW & Cloud Lakehouse.",
+    "technology_stack": ["SAP", "Oracle", "Salesforce", "Pub/Sub", "Dataflow", "BigQuery", "BigLake", "dbt", "Airflow", "Terraform"],
+    "data_assets_count": 108,
+    "pipelines_count": 42
+  },
+  "data_assets": [
+    {"id": "A-01", "name": "dw_staging.customer_events", "asset_type": "table", "platform": "BigQuery DW", "schema_name": "dw_staging"},
+    {"id": "A-02", "name": "lakehouse_raw.customer_events", "asset_type": "lakehouse_storage", "platform": "BigLake / GCS Parquet", "schema_name": "lakehouse_raw"},
+    {"id": "A-03", "name": "stg_lakehouse_customers", "asset_type": "view", "platform": "dbt / BigQuery", "schema_name": "staging"},
+    {"id": "A-04", "name": "customer_profile", "asset_type": "table", "platform": "dbt / BigQuery", "schema_name": "marts_customer"},
+    {"id": "A-05", "name": "customer_360", "asset_type": "table", "platform": "dbt / BigQuery", "schema_name": "marts_customer"},
+    {"id": "A-06", "name": "customer_quality_report", "asset_type": "view", "platform": "Dataplex", "schema_name": "governance"}
+  ],
+  "pipelines": [
+    {"id": "P-01", "name": "salesforce_customer_ingest.py", "pipeline_type": "Dataflow", "repository_id": "customer-360-data-platform"},
+    {"id": "P-02", "name": "sap_orders_ingest.tf", "pipeline_type": "Terraform", "repository_id": "customer-360-data-platform"},
+    {"id": "P-03", "name": "stg_lakehouse_customers.sql", "pipeline_type": "dbt", "repository_id": "customer-360-data-platform"},
+    {"id": "P-04", "name": "customer_360_dag.py", "pipeline_type": "Airflow", "repository_id": "customer-360-data-platform"}
+  ]
+}
