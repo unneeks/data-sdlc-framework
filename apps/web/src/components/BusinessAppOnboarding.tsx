@@ -81,7 +81,7 @@ export const BusinessAppOnboarding: React.FC = () => {
             Ecosystem Discovery & Assessment
           </h2>
           <p className="text-slate-400 text-sm md:text-base leading-relaxed max-w-2xl">
-            Provide the coordinates to your project's ecosystem. Our autonomous agents will assess the GitHub repository, Solution Intent, and Request Portal against the Institutional Delivery Model to identify gaps and missing artifacts.
+            Provide the coordinates to your project's ecosystem. Our autonomous agents will assess the GitHub repository, Solution Intent, and Request Portal against the Customer 360 Delivery Model to identify gaps and missing artifacts.
           </p>
         </div>
       </motion.div>
@@ -263,7 +263,7 @@ export const BusinessAppOnboarding: React.FC = () => {
                          <ShieldCheck className="w-4 h-4" />
                          <span>Assessment Complete</span>
                        </div>
-                       <h3 className="text-2xl font-bold text-white">Institutional Data Delivery Model Status</h3>
+                       <h3 className="text-2xl font-bold text-white">Customer 360 Data Delivery Model Status</h3>
                      </div>
                   </div>
 
