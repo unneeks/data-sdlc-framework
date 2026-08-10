@@ -18,6 +18,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'sdlc', label: 'Hero Demo (SDLC)', icon: Play },
     { id: 'impact', label: 'Impact & RCA', icon: RefreshCw },
     { id: 'gate', label: 'Gate & Approval', icon: ShieldCheck },
+    { id: 'live-incident', label: 'Live Incident (API)', icon: Play },
+    { id: 'live-gate', label: 'Live Gate (API)', icon: ShieldCheck },
     { id: 'cli', label: 'CLI Integrations', icon: Terminal },
   ];
 

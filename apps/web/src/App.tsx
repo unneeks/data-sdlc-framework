@@ -13,6 +13,8 @@ import { EngineeringControlCenter } from './components/EngineeringControlCenter'
 import { HeroDemoSimulation } from './components/HeroDemoSimulation';
 import { ImpactAndRCAViewer } from './components/ImpactAndRCAViewer';
 import { DeliveryGateApproval } from './components/DeliveryGateApproval';
+import { LiveIncidentSimulation } from './components/LiveIncidentSimulation';
+import { LiveGateApproval } from './components/LiveGateApproval';
 import { CliIntegrationExplorer } from './components/CliIntegrationExplorer';
 
 import { fetchDeliveryTypes, fetchAgents, DeliveryType, Agent } from './services/api';
@@ -106,10 +108,16 @@ export default function App() {
                 {activeTab === 'agents' && <AgentExplorer />}
                 {activeTab === 'skills' && <SkillsExplorer />}
                 {activeTab === 'sdlc' && (
-                  <HeroDemoSimulation />
+                  <HeroDemoSimulation
+                    demoState={demoState}
+                    onNextStep={handleNextDemoStep}
+                    onResetDemo={handleResetDemo}
+                  />
                 )}
                 {activeTab === 'impact' && <ImpactAndRCAViewer />}
                 {activeTab === 'gate' && <DeliveryGateApproval />}
+                {activeTab === 'live-incident' && <LiveIncidentSimulation />}
+                {activeTab === 'live-gate' && <LiveGateApproval />}
                 {activeTab === 'cli' && <CliIntegrationExplorer />}
               </motion.div>
             </AnimatePresence>
