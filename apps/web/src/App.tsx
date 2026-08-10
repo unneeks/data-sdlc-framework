@@ -106,11 +106,7 @@ export default function App() {
                 {activeTab === 'agents' && <AgentExplorer />}
                 {activeTab === 'skills' && <SkillsExplorer />}
                 {activeTab === 'sdlc' && (
-                  <HeroDemoSimulation
-                    demoState={demoState}
-                    onNextStep={handleNextDemoStep}
-                    onResetDemo={handleResetDemo}
-                  />
+                  <HeroDemoSimulation />
                 )}
                 {activeTab === 'impact' && <ImpactAndRCAViewer />}
                 {activeTab === 'gate' && <DeliveryGateApproval />}
