@@ -8,6 +8,7 @@ import { DeliveryComparisonMatrix } from './components/DeliveryComparisonMatrix'
 import { DigitalTwinExplorer } from './components/DigitalTwinExplorer';
 import { MetamodelExplorer } from './components/MetamodelExplorer';
 import { AgentExplorer } from './components/AgentExplorer';
+import { SkillsExplorer } from './components/SkillsExplorer';
 import { EngineeringControlCenter } from './components/EngineeringControlCenter';
 import { HeroDemoSimulation } from './components/HeroDemoSimulation';
 import { ImpactAndRCAViewer } from './components/ImpactAndRCAViewer';
@@ -103,6 +104,7 @@ export default function App() {
                 {activeTab === 'twin' && <DigitalTwinExplorer />}
                 {activeTab === 'metamodel' && <MetamodelExplorer />}
                 {activeTab === 'agents' && <AgentExplorer />}
+                {activeTab === 'skills' && <SkillsExplorer />}
                 {activeTab === 'sdlc' && (
                   <HeroDemoSimulation
                     demoState={demoState}

@@ -1,4 +1,4 @@
-import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database } from 'lucide-react';
+import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface SidebarProps {
@@ -12,6 +12,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'onboarding', label: 'Delivery Intent', icon: LayoutGrid },
     { id: 'metamodel', label: 'Metamodel Explorer', icon: Database },
     { id: 'agents', label: 'Agent Explorer', icon: Cpu },
+    { id: 'skills', label: 'Skills Explorer', icon: Wrench },
     { id: 'comparison', label: 'Blueprint Comparison', icon: Layers },
     { id: 'twin', label: 'Digital Twin Explorer', icon: GitBranch },
     { id: 'sdlc', label: 'Hero Demo (SDLC)', icon: Play },

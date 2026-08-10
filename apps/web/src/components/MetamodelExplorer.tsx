@@ -1,7 +1,57 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Database, FileJson, Layers, Search, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Database, FileJson, Layers, Search, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
 import metamodelData from '../data/metamodel.json';
+
+// Simple recursive JSON tree component
+const JSONTree: React.FC<{ data: any; name: string; defaultOpen?: boolean }> = ({ data, name, defaultOpen = true }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  
+  if (typeof data === 'object' && data !== null) {
+    const isArray = Array.isArray(data);
+    const keys = Object.keys(data);
+    
+    return (
+      <div className="pl-4 border-l border-slate-700/30 ml-2 py-0.5">
+        <div 
+          className="flex items-center space-x-2 cursor-pointer hover:bg-slate-800/50 p-1 rounded transition group"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          {isOpen ? <ChevronDown className="w-3 h-3 text-slate-500 group-hover:text-white" /> : <ChevronRight className="w-3 h-3 text-slate-500 group-hover:text-white" />}
+          <Folder className="w-4 h-4 text-indigo-400" />
+          <span className="text-sm font-semibold text-slate-300 group-hover:text-white">{name}</span>
+          <span className="text-xs text-slate-600 font-mono">({keys.length} {isArray ? 'items' : 'keys'})</span>
+        </div>
+        
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              {keys.map(key => (
+                <JSONTree key={key} name={key} data={(data as any)[key]} defaultOpen={false} />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  // Primitive value
+  return (
+    <div className="pl-6 ml-2 py-1 flex items-start space-x-2 hover:bg-slate-800/50 rounded transition">
+      <FileText className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+      <div>
+        <span className="text-sm text-slate-400 font-mono">{name}: </span>
+        <span className="text-sm text-emerald-300 font-mono break-all">{String(data)}</span>
+      </div>
+    </div>
+  );
+};
 
 const ENTITIES = Object.keys(metamodelData).map(key => ({
   id: key,
@@ -33,10 +83,10 @@ export const MetamodelExplorer: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden">
         
         {/* Left Pane: List */}
-        <div className="glass-panel p-4 rounded-3xl border-slate-700/50 flex flex-col h-full overflow-hidden">
+        <div className="lg:col-span-3 glass-panel p-4 rounded-3xl border-slate-700/50 flex flex-col h-full overflow-hidden">
            <div className="relative mb-4">
              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
              <input
@@ -73,8 +123,34 @@ export const MetamodelExplorer: React.FC = () => {
            </div>
         </div>
 
-        {/* Right Pane: Details */}
-        <div className="md:col-span-2 glass-panel p-6 rounded-3xl border-slate-700/50 flex flex-col h-full overflow-hidden">
+        {/* Middle Pane: Tree Structure */}
+        <div className="lg:col-span-4 glass-panel p-6 rounded-3xl border-slate-700/50 flex flex-col h-full overflow-hidden bg-slate-950/50">
+          {selectedEntity ? (
+            <motion.div 
+               key={`tree-${selectedEntity.id}`}
+               initial={{ opacity: 0, x: -10 }}
+               animate={{ opacity: 1, x: 0 }}
+               className="h-full flex flex-col"
+            >
+              <div className="mb-4 pb-4 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="font-bold text-white flex items-center space-x-2">
+                  <Layers className="w-5 h-5 text-indigo-400" />
+                  <span>Schema Tree</span>
+                </h3>
+              </div>
+              <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-900/50 rounded-2xl p-4 border border-slate-800">
+                <JSONTree name={selectedEntity.id} data={selectedEntity.data} />
+              </div>
+            </motion.div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-slate-500">
+              Select an entity
+            </div>
+          )}
+        </div>
+
+        {/* Right Pane: Details JSON */}
+        <div className="lg:col-span-5 glass-panel p-6 rounded-3xl border-slate-700/50 flex flex-col h-full overflow-hidden">
            {selectedEntity ? (
              <motion.div 
                key={selectedEntity.id}
@@ -88,7 +164,7 @@ export const MetamodelExplorer: React.FC = () => {
                     <p className="text-slate-400">Source: metamodel-registry/{selectedEntity.id}.yaml</p>
                   </div>
                   <div className="px-3 py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-slate-500">
-                    Schema Definition
+                    Raw JSON
                   </div>
                 </div>
 
