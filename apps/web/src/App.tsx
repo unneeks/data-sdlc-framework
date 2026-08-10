@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { BusinessAppOnboarding } from './components/BusinessAppOnboarding';
+import { ProjectGraphExplorer } from './components/ProjectGraphExplorer';
 import { DeliveryTypeOnboarding } from './components/DeliveryTypeOnboarding';
 import { DeliveryComparisonMatrix } from './components/DeliveryComparisonMatrix';
 import { DigitalTwinExplorer } from './components/DigitalTwinExplorer';
@@ -96,6 +97,7 @@ export default function App() {
                 className="w-full h-full"
               >
                 {activeTab === 'project_onboarding' && <BusinessAppOnboarding />}
+                {activeTab === 'project-graph' && <ProjectGraphExplorer />}
                 {activeTab === 'onboarding' && (
                   <DeliveryTypeOnboarding
                     deliveryTypes={deliveryTypes}

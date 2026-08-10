@@ -1,4 +1,4 @@
-import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench } from 'lucide-react';
+import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench, Network } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface SidebarProps {
@@ -9,6 +9,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'project_onboarding', label: 'Project Discovery', icon: Briefcase },
+    { id: 'project-graph', label: 'Project Graph', icon: Network },
     { id: 'onboarding', label: 'Delivery Intent', icon: LayoutGrid },
     { id: 'metamodel', label: 'Metamodel Explorer', icon: Database },
     { id: 'agents', label: 'Agent Explorer', icon: Cpu },
