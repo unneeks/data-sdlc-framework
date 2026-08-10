@@ -9,7 +9,6 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
     { id: 'project_onboarding', label: 'Project Discovery', icon: Briefcase },
-    { id: 'project-graph', label: 'Project Graph', icon: Network },
     { id: 'onboarding', label: 'Delivery Intent', icon: LayoutGrid },
     { id: 'metamodel', label: 'Metamodel Explorer', icon: Database },
     { id: 'agents', label: 'Agent Explorer', icon: Cpu },
@@ -22,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'live-incident', label: 'Live Incident (API)', icon: Play },
     { id: 'live-gate', label: 'Live Gate (API)', icon: ShieldCheck },
     { id: 'cli', label: 'CLI Integrations', icon: Terminal },
+    { id: 'project-graph', label: 'Simulated Project Graph', icon: Network },
   ];
 
   return (
