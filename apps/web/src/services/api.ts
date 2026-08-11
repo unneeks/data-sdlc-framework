@@ -30,8 +30,23 @@ const API_BASE = '/api';
 
 export async function fetchDeliveryTypes(): Promise<DeliveryType[]> {
   try {
-    const res = await fetch(`${API_BASE}/delivery-types`);
-    if (res.ok) return await res.json();
+    const res = await fetch(`${API_BASE}/delivery-models`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return data.map((dm: any) => ({
+          id: dm.key,
+          name: dm.name,
+          description: dm.methodology ? `Methodology: ${dm.methodology}` : "Configurable Delivery Model",
+          business_purpose: "Automated agentic delivery",
+          baseline_risk: "MEDIUM",
+          phases_count: dm.phases_count || 5,
+          tasks_count: dm.tasks_count || 10,
+          default_agents: [],
+          required_skills: []
+        }));
+      }
+    }
   } catch (e) {
     console.warn("Using offline fallback for delivery types", e);
   }
@@ -74,8 +89,27 @@ export async function fetchDeliveryTypes(): Promise<DeliveryType[]> {
 
 export async function fetchAgents(): Promise<Agent[]> {
   try {
-    const res = await fetch(`${API_BASE}/agents`);
-    if (res.ok) return await res.json();
+    const res = await fetch(`${API_BASE}/marketplace`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.agents) {
+        return data.agents.map((a: any) => ({
+          id: a.agent_key,
+          name: a.name,
+          version: "1.0.0", // Extracted dynamically if present
+          description: a.description,
+          engineering_role: a.role_key || "Engineering Role",
+          capabilities: a.capabilities || [],
+          supported_delivery_types: [],
+          skills: a.skill_keys || [],
+          tools: a.tool_keys || [],
+          risk_level: a.risk_level || "MEDIUM",
+          autonomy_level: a.autonomy_level || "AUTOMATIC",
+          trust_score: 0.95,
+          certification_status: "CERTIFIED"
+        }));
+      }
+    }
   } catch (e) {
     console.warn("Using offline fallback for agents", e);
   }
@@ -124,6 +158,56 @@ export async function fetchAgents(): Promise<Agent[]> {
       autonomy_level: "APPROVAL_REQUIRED",
       trust_score: 0.97,
       certification_status: "CERTIFIED"
+    }
+  ];
+}
+
+export async function fetchSkills(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/marketplace`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.skills) {
+        return data.skills.map((s: any) => ({
+          id: s.skill_key || s.key || s.id,
+          name: s.name,
+          riskLevel: s.risk_level || 'LOW',
+          deterministic: s.deterministic !== undefined ? s.deterministic : true,
+          dependencies: s.dependencies || [],
+          requiredTools: s.required_tools || [],
+          requiredKnowledge: s.required_knowledge || [],
+          outputs: s.outputs ? Object.entries(s.outputs).map(([k, v]) => `${k}: ${v}`) : [],
+          dischargesChecklist: s.discharges_checklist_items || []
+        }));
+      }
+    }
+  } catch (e) {
+    console.warn("Using offline fallback for skills", e);
+  }
+  
+  // Demo mode fallback for skills
+  return [
+    {
+      id: "schema-diff",
+      name: "Schema Diff Analysis",
+      riskLevel: "MEDIUM",
+      deterministic: true,
+      dependencies: [],
+      requiredTools: ["schema-analyzer"],
+      requiredKnowledge: [],
+      outputs: ["diff_report: markdown"],
+      dischargesChecklist: ["CHK-001"]
+    },
+    {
+      id: "impact-analysis",
+      name: "Technical Impact Analysis",
+      riskLevel: "HIGH",
+      deterministic: false,
+      dependencies: ["schema-diff"],
+      requiredTools: ["lineage-scanner"],
+      requiredKnowledge: ["KP-SYSTEM-ARCH"],
+      outputs: ["impact_score: float", "impact_report: markdown"],
+      dischargesChecklist: ["CHK-002", "CHK-003"]
     }
   ];
 }

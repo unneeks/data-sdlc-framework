@@ -1,25 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, Database, FileText, CheckCircle2, Search, X, Wrench, BookOpen, GitMerge, AlertTriangle, Layers } from 'lucide-react';
-import metamodelData from '../data/metamodel.json';
-
-const SKILLS = (metamodelData.skills as any).skills.map((s: any) => ({
-  id: s.key,
-  name: s.name,
-  riskLevel: s.risk_level || 'LOW',
-  deterministic: s.deterministic !== undefined ? s.deterministic : true,
-  dependencies: s.dependencies || [],
-  requiredTools: s.required_tools || [],
-  requiredKnowledge: s.required_knowledge || [],
-  outputs: s.outputs ? Object.entries(s.outputs).map(([k, v]) => `${k}: ${v}`) : [],
-  dischargesChecklist: s.discharges_checklist_items || []
-}));
+import { fetchSkills } from '../services/api';
 
 export const SkillsExplorer: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<any>(null);
+  const [skills, setSkills] = useState<any[]>([]);
 
-  const filteredSkills = SKILLS.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.id.toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => {
+    async function loadSkills() {
+      const apiSkills = await fetchSkills();
+      setSkills(apiSkills);
+    }
+    loadSkills();
+  }, []);
+
+  const filteredSkills = skills.filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.id.toLowerCase().includes(search.toLowerCase()));
 
   const getRiskColor = (risk: string) => {
     switch (risk.toUpperCase()) {

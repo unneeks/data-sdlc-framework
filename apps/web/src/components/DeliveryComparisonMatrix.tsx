@@ -1,16 +1,28 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Layers, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { fetchDeliveryTypes } from '../services/api';
 
 export const DeliveryComparisonMatrix: React.FC = () => {
-  const comparisonData = [
-    { type: 'DATA_PLATFORM_MIGRATION', name: 'Data Platform Migration', phases: 9, tasks: 42, agents: 10, gates: 8, evidence: 21, risk: 'HIGH' },
-    { type: 'DATA_PRODUCT_NEW', name: 'New Data Product', phases: 8, tasks: 37, agents: 11, gates: 7, evidence: 19, risk: 'MEDIUM' },
-    { type: 'REGULATORY_POLICY_CHANGE', name: 'Regulatory Policy Change', phases: 5, tasks: 20, agents: 6, gates: 5, evidence: 15, risk: 'HIGH' },
-    { type: 'NEW_DATA_SOURCE_ONBOARDING', name: 'New Source Onboarding', phases: 6, tasks: 22, agents: 7, gates: 5, evidence: 12, risk: 'MEDIUM' },
-    { type: 'DATA_PRODUCT_AMENDMENT', name: 'Data Product Amendment', phases: 5, tasks: 18, agents: 6, gates: 4, evidence: 10, risk: 'MEDIUM' },
-    { type: 'DATA_PRODUCT_DEFECT', name: 'Defect / Remediation', phases: 4, tasks: 12, agents: 5, gates: 3, evidence: 8, risk: 'LOW' },
-  ];
+  const [comparisonData, setComparisonData] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadData() {
+      const types = await fetchDeliveryTypes();
+      const mapped = types.map((t: any) => ({
+        type: t.id,
+        name: t.name,
+        phases: t.phases_count || 5,
+        tasks: t.tasks_count || 20,
+        agents: t.default_agents?.length || 6,
+        gates: 5, // Default gate count for UI
+        evidence: 10, // Default evidence count
+        risk: t.baseline_risk || 'MEDIUM'
+      }));
+      setComparisonData(mapped);
+    }
+    loadData();
+  }, []);
 
   return (
     <div className="space-y-8 pb-12">

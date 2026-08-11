@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, Cpu, Database, FileText, CheckCircle2, Search, X, Activity, Wrench, BarChart, BookOpen, Clock } from 'lucide-react';
-import metamodelData from '../data/metamodel.json';
+import { fetchAgents, Agent } from '../services/api';
 
 // Deterministic telemetry generator based on string hash
 const generateTelemetry = (id: string) => {
@@ -14,24 +14,33 @@ const generateTelemetry = (id: string) => {
   };
 };
 
-const AGENTS = (metamodelData.agents as any).agents.map((a: any) => ({
-  id: a.key,
-  name: a.name,
-  role: a.role_key,
-  description: a.mission || 'Autonomous Marketplace Agent',
-  metrics: generateTelemetry(a.key),
-  linkedEntities: ['Agent', a.role_key, ...(a.capabilities || [])],
-  skills: a.skills || [],
-  tools: a.tools || [],
-  tasks: a.delivery?.supported_tasks || ['Autonomous Execution'],
-  references: a.knowledge_packs || []
-}));
-
 export const AgentExplorer: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<any>(null);
+  const [agents, setAgents] = useState<any[]>([]);
 
-  const filteredAgents = AGENTS.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.role.toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => {
+    async function loadAgents() {
+      const apiAgents = await fetchAgents();
+      // Add deterministic mock telemetry for visualization since API doesn't provide it
+      const enhancedAgents = apiAgents.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        role: a.engineering_role,
+        description: a.description || 'Autonomous Marketplace Agent',
+        metrics: generateTelemetry(a.id),
+        linkedEntities: ['Agent', a.engineering_role, ...(a.capabilities || [])],
+        skills: a.skills || [],
+        tools: a.tools || [],
+        tasks: ['Autonomous Execution'], // Defaulting tasks if missing in API
+        references: []
+      }));
+      setAgents(enhancedAgents);
+    }
+    loadAgents();
+  }, []);
+
+  const filteredAgents = agents.filter(a => a.name.toLowerCase().includes(search.toLowerCase()) || a.role.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="h-full flex flex-col space-y-6">
