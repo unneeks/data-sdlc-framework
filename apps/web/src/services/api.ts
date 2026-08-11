@@ -282,3 +282,46 @@ export async function fetchImpactAnalysis(changeId: string = "CR-2026-8942") {
     }
   };
 }
+
+export async function fetchProjectGraph(projectId: string = "customer-360") {
+  try {
+    const res = await fetch(`${API_BASE}/projects/${projectId}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.warn("Using offline fallback for project graph", e);
+  }
+  
+  // Offline fallback returns the same format as the backend
+  return {
+    project_id: projectId,
+    entities_by_type: {
+      "Project": [{ id: "customer-360", name: "Customer 360", description: "Lakehouse Migration" }],
+      "DataAsset": [
+        { id: "sap", name: "SAP CRM" },
+        { id: "salesforce", name: "Salesforce" },
+        { id: "lakehouse", name: "Iceberg Lakehouse" }
+      ],
+      "Pipeline": [
+        { id: "pipeline-1", name: "salesforce_customer_ingest" },
+        { id: "pipeline-2", name: "sap_crm_ingest" }
+      ],
+      "DeliveryArtifact": [
+        { id: "runbook", name: "Lakehouse Runbook" },
+        { id: "architecture-design", name: "Architecture Design Document" }
+      ]
+    },
+    relationships_by_type: {
+      "CONSUMES": [
+        { source: { id: "pipeline-1", type: "Pipeline" }, target: { id: "salesforce", type: "DataAsset" } },
+        { source: { id: "pipeline-2", type: "Pipeline" }, target: { id: "sap", type: "DataAsset" } }
+      ],
+      "PRODUCES": [
+        { source: { id: "pipeline-1", type: "Pipeline" }, target: { id: "lakehouse", type: "DataAsset" } },
+        { source: { id: "pipeline-2", type: "Pipeline" }, target: { id: "lakehouse", type: "DataAsset" } }
+      ]
+    },
+    catalog_reference_count: 0
+  };
+}

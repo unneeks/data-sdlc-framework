@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
+import { fetchProjectGraph } from '../services/api';
 import {
   ReactFlow,
   MiniMap,
@@ -105,59 +106,86 @@ const nodeTypes = {
   doc: DocNode,
 };
 
-// --- Initial Graph Data ---
-
-const initialNodes = [
-  // Assets (Left)
-  { id: 'sap', type: 'asset', position: { x: 50, y: 150 }, data: { label: 'SAP CRM', type: 'Source System' } },
-  { id: 'salesforce', type: 'asset', position: { x: 50, y: 300 }, data: { label: 'Salesforce', type: 'Source System' } },
-  
-  // Agents (Center)
-  { id: 'migration-architect', type: 'agent', position: { x: 400, y: 100 }, data: { label: 'Migration Architect' } },
-  { id: 'data-modeler', type: 'agent', position: { x: 400, y: 220 }, data: { label: 'Data Modeling Agent' } },
-  { id: 'pipeline-agent', type: 'agent', position: { x: 400, y: 340 }, data: { label: 'Pipeline Agent' } },
-  
-  // Skills & Tools (Top/Bottom)
-  { id: 'schema-parsing', type: 'skill', position: { x: 750, y: 50 }, data: { label: 'Schema Extraction' } },
-  { id: 'dbt-codegen', type: 'skill', position: { x: 750, y: 150 }, data: { label: 'dbt Code Generation' } },
-  { id: 'git-client', type: 'tool', position: { x: 750, y: 250 }, data: { label: 'GitHub API' } },
-  { id: 'dbt-cli', type: 'tool', position: { x: 750, y: 350 }, data: { label: 'dbt CLI' } },
-  
-  // Target Assets (Right)
-  { id: 'lakehouse', type: 'asset', position: { x: 1050, y: 220 }, data: { label: 'Iceberg Lakehouse', type: 'Target System' } },
-  
-  // Docs
-  { id: 'runbook', type: 'doc', position: { x: 1050, y: 350 }, data: { label: 'Lakehouse Runbook' } },
-];
-
-const initialEdges = [
-  // Sources to Agents
-  { id: 'e1', source: 'sap', target: 'migration-architect', animated: true, style: { stroke: '#94a3b8' } },
-  { id: 'e2', source: 'salesforce', target: 'migration-architect', animated: true, style: { stroke: '#94a3b8' } },
-  { id: 'e3', source: 'sap', target: 'data-modeler', animated: true, style: { stroke: '#94a3b8' } },
-  
-  // Agents collaborating
-  { id: 'e4', source: 'migration-architect', target: 'data-modeler', style: { stroke: '#818cf8', strokeWidth: 2 } },
-  { id: 'e5', source: 'data-modeler', target: 'pipeline-agent', style: { stroke: '#818cf8', strokeWidth: 2 } },
-  
-  // Agents using skills
-  { id: 'e6', source: 'migration-architect', target: 'schema-parsing', style: { stroke: '#34d399', strokeDasharray: '5 5' } },
-  { id: 'e7', source: 'pipeline-agent', target: 'dbt-codegen', style: { stroke: '#34d399', strokeDasharray: '5 5' } },
-  
-  // Agents using tools
-  { id: 'e8', source: 'pipeline-agent', target: 'git-client', style: { stroke: '#fbbf24', strokeDasharray: '5 5' } },
-  { id: 'e9', source: 'pipeline-agent', target: 'dbt-cli', style: { stroke: '#fbbf24', strokeDasharray: '5 5' } },
-  
-  // Agents interacting with target
-  { id: 'e10', source: 'pipeline-agent', target: 'lakehouse', animated: true, style: { stroke: '#22d3ee', strokeWidth: 2 } },
-  
-  // Documentation outputs
-  { id: 'e11', source: 'migration-architect', target: 'runbook', style: { stroke: '#fb7185' } },
-];
+// --- Dynamic Graph Data Logic ---
 
 export const ProjectGraphExplorer: React.FC = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  useEffect(() => {
+    async function loadGraph() {
+      const data = await fetchProjectGraph('customer-360');
+      
+      const newNodes: any[] = [];
+      const newEdges: any[] = [];
+      
+      // Simple programmatic layout
+      let yAsset = 50;
+      let yPipeline = 50;
+      let yDoc = 50;
+      let yProject = 50;
+      
+      if (data && data.entities_by_type) {
+        Object.entries(data.entities_by_type).forEach(([type, entities]: [string, any]) => {
+          entities.forEach((entity: any) => {
+            let nodeType = 'asset';
+            let x = 0;
+            let y = 0;
+            
+            // Map types to lanes
+            if (type === 'DataAsset') {
+               nodeType = 'asset';
+               x = 50;
+               y = yAsset;
+               yAsset += 120;
+            } else if (type === 'Pipeline' || type === 'Infrastructure') {
+               nodeType = 'tool';
+               x = 400;
+               y = yPipeline;
+               yPipeline += 120;
+            } else if (type === 'DeliveryArtifact' || type === 'Repository') {
+               nodeType = 'doc';
+               x = 750;
+               y = yDoc;
+               yDoc += 120;
+            } else if (type === 'Project') {
+               nodeType = 'agent'; // Using agent node style for project
+               x = 400;
+               y = -100;
+               yProject += 120;
+            }
+            
+            newNodes.push({
+              id: `${type}::${entity.id || entity.name}`,
+              type: nodeType,
+              position: { x, y },
+              data: { label: entity.name || entity.id, type: type }
+            });
+          });
+        });
+      }
+      
+      if (data && data.relationships_by_type) {
+        let edgeId = 0;
+        Object.entries(data.relationships_by_type).forEach(([relType, rels]: [string, any]) => {
+          rels.forEach((rel: any) => {
+            newEdges.push({
+              id: `e${edgeId++}`,
+              source: `${rel.source.type}::${rel.source.id}`,
+              target: `${rel.target.type}::${rel.target.id}`,
+              animated: true,
+              style: { stroke: '#818cf8', strokeWidth: 1.5 }
+            });
+          });
+        });
+      }
+      
+      setNodes(newNodes);
+      setEdges(newEdges);
+    }
+    
+    loadGraph();
+  }, [setNodes, setEdges]);
 
   const onConnect = useCallback((params: any) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -179,7 +207,7 @@ export const ProjectGraphExplorer: React.FC = () => {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex-1 min-h-[600px] glass-panel rounded-3xl overflow-hidden relative border border-slate-700 shadow-2xl shadow-indigo-900/20"
+        className="w-full h-[600px] glass-panel rounded-3xl overflow-hidden relative border border-slate-700 shadow-2xl shadow-indigo-900/20"
       >
         <ReactFlow
           nodes={nodes}
