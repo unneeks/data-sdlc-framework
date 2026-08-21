@@ -1,0 +1,407 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:dsdlc="http://example.org/ontology/data-sdlc#">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       RDFS Schema: Agentic Data SDLC Framework
+       A lightweight vocabulary for data engineering delivery lifecycle.
+       ═══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- ── Technical Twin Classes ─────────────────────────────────────────── -->
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Project">
+    <rdfs:label>Project</rdfs:label>
+    <rdfs:comment>A data engineering project containing assets, pipelines, and delivery plans.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DataAsset">
+    <rdfs:label>Data Asset</rdfs:label>
+    <rdfs:comment>A logical or physical data entity (table, view, topic, storage object).</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Pipeline">
+    <rdfs:label>Pipeline</rdfs:label>
+    <rdfs:comment>A data transformation or ingestion pipeline.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#LineageNode">
+    <rdfs:label>Lineage Node</rdfs:label>
+    <rdfs:comment>A node in the data lineage graph.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#LineageEdge">
+    <rdfs:label>Lineage Edge</rdfs:label>
+    <rdfs:comment>A directed dependency between lineage nodes.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#CodeArtifact">
+    <rdfs:label>Code Artifact</rdfs:label>
+    <rdfs:comment>A versioned source code file in a repository.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#InfrastructureResource">
+    <rdfs:label>Infrastructure Resource</rdfs:label>
+    <rdfs:comment>A cloud infrastructure resource managed as code.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Change">
+    <rdfs:label>Change</rdfs:label>
+    <rdfs:comment>A modification event triggering impact analysis and delivery workflows.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Test">
+    <rdfs:label>Test</rdfs:label>
+    <rdfs:comment>A validation test (schema parity, reconciliation, data quality, regression).</rdfs:comment>
+  </rdfs:Class>
+
+  <!-- ── Delivery Twin Classes ──────────────────────────────────────────── -->
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryType">
+    <rdfs:label>Delivery Type</rdfs:label>
+    <rdfs:comment>A category of data engineering work.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryBlueprint">
+    <rdfs:label>Delivery Blueprint</rdfs:label>
+    <rdfs:comment>A template defining standard phases, tasks, and gates for a delivery type.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryPlan">
+    <rdfs:label>Delivery Plan</rdfs:label>
+    <rdfs:comment>An instantiated plan for a specific project.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryPhase">
+    <rdfs:label>Delivery Phase</rdfs:label>
+    <rdfs:comment>A sequential stage in a delivery plan.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryTask">
+    <rdfs:label>Delivery Task</rdfs:label>
+    <rdfs:comment>A unit of work within a phase with inputs, outputs, and acceptance criteria.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#ApprovalGate">
+    <rdfs:label>Approval Gate</rdfs:label>
+    <rdfs:comment>A quality checkpoint that must pass before the next phase.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Evidence">
+    <rdfs:label>Evidence</rdfs:label>
+    <rdfs:comment>A verifiable artifact supporting gate approval.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#ChecklistItem">
+    <rdfs:label>Checklist Item</rdfs:label>
+    <rdfs:comment>A completion criterion within a task.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#AcceptanceCriterion">
+    <rdfs:label>Acceptance Criterion</rdfs:label>
+    <rdfs:comment>A measurable condition for task completion.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Approval">
+    <rdfs:label>Approval</rdfs:label>
+    <rdfs:comment>A decision record for a gate.</rdfs:comment>
+  </rdfs:Class>
+
+  <!-- ── Agent Ecosystem Classes ────────────────────────────────────────── -->
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Agent">
+    <rdfs:label>Agent</rdfs:label>
+    <rdfs:comment>An AI agent with capabilities, skills, tools, and governance policies.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Skill">
+    <rdfs:label>Skill</rdfs:label>
+    <rdfs:comment>A reusable capability an agent can exercise.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Tool">
+    <rdfs:label>Tool</rdfs:label>
+    <rdfs:comment>An executable instrument used by agents.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#KnowledgePack">
+    <rdfs:label>Knowledge Pack</rdfs:label>
+    <rdfs:comment>A curated domain knowledge collection informing agent reasoning.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Policy">
+    <rdfs:label>Policy</rdfs:label>
+    <rdfs:comment>A governance rule set constraining agent behaviour.</rdfs:comment>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryContract">
+    <rdfs:label>Delivery Contract</rdfs:label>
+    <rdfs:comment>A binding agreement between a task and an agent.</rdfs:comment>
+  </rdfs:Class>
+
+  <!-- ── Properties — Technical Twin ────────────────────────────────────── -->
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasDataAsset">
+    <rdfs:label>has data asset</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Project"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DataAsset"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasPipeline">
+    <rdfs:label>has pipeline</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Project"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Pipeline"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#consumesInput">
+    <rdfs:label>consumes input</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Pipeline"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DataAsset"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#producesOutput">
+    <rdfs:label>produces output</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Pipeline"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DataAsset"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#dependsOn">
+    <rdfs:label>depends on</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#LineageNode"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#LineageNode"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasSource">
+    <rdfs:label>has source</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#LineageEdge"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#LineageNode"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasTarget">
+    <rdfs:label>has target</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#LineageEdge"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#LineageNode"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#impacts">
+    <rdfs:label>impacts</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Change"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DataAsset"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#modifiesFile">
+    <rdfs:label>modifies file</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Change"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#CodeArtifact"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#testsAsset">
+    <rdfs:label>tests asset</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Test"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DataAsset"/>
+  </rdf:Property>
+
+  <!-- ── Properties — Delivery Twin ─────────────────────────────────────── -->
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasDeliveryPlan">
+    <rdfs:label>has delivery plan</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Project"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPlan"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#derivedFromBlueprint">
+    <rdfs:label>derived from blueprint</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPlan"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryBlueprint"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#blueprintForType">
+    <rdfs:label>blueprint for type</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryBlueprint"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryType"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasPhase">
+    <rdfs:label>has phase</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPlan"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasTask">
+    <rdfs:label>has task</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasGate">
+    <rdfs:label>has gate</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#ApprovalGate"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#requiresEvidence">
+    <rdfs:label>requires evidence</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#ApprovalGate"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Evidence"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasChecklist">
+    <rdfs:label>has checklist</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#ChecklistItem"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasAcceptanceCriterion">
+    <rdfs:label>has acceptance criterion</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#AcceptanceCriterion"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasApproval">
+    <rdfs:label>has approval</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#ApprovalGate"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Approval"/>
+  </rdf:Property>
+
+  <!-- ── Properties — Agent Ecosystem ───────────────────────────────────── -->
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasSkill">
+    <rdfs:label>has skill</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Skill"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#usesTool">
+    <rdfs:label>uses tool</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Tool"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasKnowledgePack">
+    <rdfs:label>has knowledge pack</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#KnowledgePack"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#governedByPolicy">
+    <rdfs:label>governed by policy</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Policy"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#supportsDeliveryType">
+    <rdfs:label>supports delivery type</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryType"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#assignedToTask">
+    <rdfs:label>assigned to task</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#requiresAgent">
+    <rdfs:label>requires agent</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#skillRequiresTool">
+    <rdfs:label>skill requires tool</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Skill"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Tool"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#contractBindsAgent">
+    <rdfs:label>contract binds agent</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryContract"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#contractBindsTask">
+    <rdfs:label>contract binds task</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryContract"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#contractRequiresGate">
+    <rdfs:label>contract requires gate</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryContract"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#ApprovalGate"/>
+  </rdf:Property>
+
+  <!-- ── Datatype Properties ────────────────────────────────────────────── -->
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#identifier">
+    <rdfs:label>identifier</rdfs:label>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#name">
+    <rdfs:label>name</rdfs:label>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#description">
+    <rdfs:label>description</rdfs:label>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#version">
+    <rdfs:label>version</rdfs:label>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#platform">
+    <rdfs:label>platform</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DataAsset"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#assetType">
+    <rdfs:label>asset type</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DataAsset"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#trustScore">
+    <rdfs:label>trust score</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#float"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#engineeringRole">
+    <rdfs:label>engineering role</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Agent"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#sequence">
+    <rdfs:label>sequence</rdfs:label>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#timestamp">
+    <rdfs:label>timestamp</rdfs:label>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#dateTime"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#confidence">
+    <rdfs:label>confidence</rdfs:label>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#float"/>
+  </rdf:Property>
+
+  <!-- ── Subclass Relationships ─────────────────────────────────────────── -->
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DataAsset">
+    <rdfs:subClassOf rdf:resource="http://example.org/ontology/data-sdlc#LineageNode"/>
+  </rdfs:Class>
+
+  <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Pipeline">
+    <rdfs:subClassOf rdf:resource="http://example.org/ontology/data-sdlc#LineageNode"/>
+  </rdfs:Class>
+
+</rdf:RDF>
