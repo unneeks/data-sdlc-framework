@@ -26,7 +26,7 @@ export interface Agent {
   certification_status: string;
 }
 
-const API_BASE = '/api';
+const API_BASE = '/app/8000/api';
 
 export async function fetchDeliveryTypes(): Promise<DeliveryType[]> {
   try {

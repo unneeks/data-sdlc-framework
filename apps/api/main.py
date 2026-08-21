@@ -60,7 +60,7 @@ graph_engine = DigitalTwinGraph(project_seed if isinstance(project_seed, dict) e
 eval_engine = EvaluationEngine()
 scenario_runner = ScenarioRunner()
 
-@app.get("/")
+@app.get("/api/status")
 def read_root():
     return {"system": "Agentic Data Engineering Platform API", "status": "ONLINE"}
 
@@ -135,6 +135,20 @@ def get_cli_commands():
             "gh copilot agent run --agent migration-architect-agent --prompt 'Generate storage mapping'"
         ]
     }
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
+if dist_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(dist_dir / "assets")), name="static-assets")
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        file_path = dist_dir / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(dist_dir / "index.html"))
 
 if __name__ == "__main__":
     import uvicorn
