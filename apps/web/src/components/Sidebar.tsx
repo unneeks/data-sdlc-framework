@@ -7,19 +7,34 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
-  const tabs = [
-    { id: 'project_onboarding', label: 'Project Discovery', icon: Briefcase },
-    { id: 'onboarding', label: 'Delivery Intent', icon: LayoutGrid },
-    { id: 'metamodel', label: 'Metamodel Explorer', icon: Database },
-    { id: 'agents', label: 'Agent Explorer', icon: Cpu },
-    { id: 'skills', label: 'Skills Explorer', icon: Wrench },
-    { id: 'comparison', label: 'Blueprint Comparison', icon: Layers },
-    { id: 'twin', label: 'Digital Twin Explorer', icon: GitBranch },
-    { id: 'sdlc', label: 'Hero Demo (SDLC)', icon: Play },
-    { id: 'impact', label: 'Impact & RCA', icon: RefreshCw },
-    { id: 'gate', label: 'Gate & Approval', icon: ShieldCheck },
-    { id: 'ontology', label: 'Ontology Explorer', icon: Share2 },
-    { id: 'cli', label: 'CLI Integrations', icon: Terminal },
+  const sections = [
+    {
+      title: 'Model Definitions',
+      tabs: [
+        { id: 'metamodel', label: 'Metamodel Explorer', icon: Database },
+        { id: 'ontology', label: 'Ontology Explorer', icon: Share2 },
+        { id: 'agents', label: 'Agent Explorer', icon: Cpu },
+        { id: 'skills', label: 'Skills Explorer', icon: Wrench },
+        { id: 'comparison', label: 'Blueprint Comparison', icon: Layers },
+      ],
+    },
+    {
+      title: 'Onboarding Wizard',
+      tabs: [
+        { id: 'project_onboarding', label: 'Project Discovery', icon: Briefcase },
+        { id: 'onboarding', label: 'Delivery Intent', icon: LayoutGrid },
+      ],
+    },
+    {
+      title: 'Project Workflow',
+      tabs: [
+        { id: 'twin', label: 'Digital Twin Explorer', icon: GitBranch },
+        { id: 'sdlc', label: 'Hero Demo (SDLC)', icon: Play },
+        { id: 'impact', label: 'Impact & RCA', icon: RefreshCw },
+        { id: 'gate', label: 'Gate & Approval', icon: ShieldCheck },
+        { id: 'cli', label: 'CLI Integrations', icon: Terminal },
+      ],
+    },
   ];
 
   return (
@@ -35,37 +50,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 custom-scrollbar">
-        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 px-3">Ecosystem Views</div>
-        
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group overflow-hidden ${
-                isActive 
-                  ? 'text-white' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              {isActive && (
-                <motion.div 
-                  layoutId="active-tab-indicator"
-                  className="absolute inset-0 bg-indigo-600/20 border border-indigo-500/40 rounded-xl"
-                  initial={false}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                />
-              )}
-              
-              <Icon className={`w-4 h-4 relative z-10 transition-colors ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
-              <span className="relative z-10">{tab.label}</span>
-            </button>
-          );
-        })}
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-4 custom-scrollbar">
+        {sections.map((section) => (
+          <div key={section.title}>
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-3">{section.title}</div>
+            <div className="space-y-1">
+              {section.tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all relative group overflow-hidden ${
+                      isActive
+                        ? 'text-white'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="active-tab-indicator"
+                        className="absolute inset-0 bg-indigo-600/20 border border-indigo-500/40 rounded-xl"
+                        initial={false}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      />
+                    )}
+
+                    <Icon className={`w-4 h-4 relative z-10 transition-colors ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                    <span className="relative z-10">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       <div className="p-4 border-t border-slate-800/80">
