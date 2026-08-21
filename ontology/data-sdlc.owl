@@ -14,9 +14,9 @@
 
   <owl:Ontology rdf:about="http://example.org/ontology/data-sdlc">
     <dc:title>Agentic Data SDLC Ontology</dc:title>
-    <dc:description>An ontology for modelling the complete lifecycle of data engineering deliveries, including technical twins (data assets, pipelines, lineage), delivery twins (plans, phases, tasks, gates), AI agents, skills, tools, and governance constructs.</dc:description>
+    <dc:description>An ontology for modelling the complete lifecycle of data engineering deliveries, including technical twins (data assets, pipelines, lineage), delivery twins (plans, phases, tasks, activities, artifacts, gates), AI agents, skills, tools, and governance constructs.</dc:description>
     <dc:creator>Data SDLC Framework</dc:creator>
-    <owl:versionInfo>1.0.0</owl:versionInfo>
+    <owl:versionInfo>2.0.0</owl:versionInfo>
   </owl:Ontology>
 
   <!-- ═══════════════════════════════════════════════════════════════════════
@@ -89,12 +89,27 @@
 
   <owl:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryPhase">
     <rdfs:label>Delivery Phase</rdfs:label>
-    <rdfs:comment>A sequential stage in a delivery plan (Architecture, Design, Development, Testing, Operations).</rdfs:comment>
+    <rdfs:comment>A sequential stage in a delivery plan. Standard phases: Discovery, Requirements, Architecture, Design, Development, Testing, Release, Deployment, Operations, Transition to BAU.</rdfs:comment>
   </owl:Class>
 
   <owl:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryTask">
     <rdfs:label>Delivery Task</rdfs:label>
     <rdfs:comment>A discrete unit of work within a delivery phase, with inputs, outputs, and acceptance criteria.</rdfs:comment>
+  </owl:Class>
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryActivity">
+    <rdfs:label>Delivery Activity</rdfs:label>
+    <rdfs:comment>A grouping of related work within a phase, containing tasks and producing artifacts.</rdfs:comment>
+  </owl:Class>
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryArtifact">
+    <rdfs:label>Delivery Artifact</rdfs:label>
+    <rdfs:comment>A tangible output of a delivery task or activity (document, model, specification, report, runbook).</rdfs:comment>
+  </owl:Class>
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryRole">
+    <rdfs:label>Delivery Role</rdfs:label>
+    <rdfs:comment>A human or organisational role responsible for tasks, approvals, or artifact ownership within a delivery.</rdfs:comment>
   </owl:Class>
 
   <owl:Class rdf:about="http://example.org/ontology/data-sdlc#ApprovalGate">
@@ -120,6 +135,21 @@
   <owl:Class rdf:about="http://example.org/ontology/data-sdlc#Approval">
     <rdfs:label>Approval</rdfs:label>
     <rdfs:comment>A decision record for a gate (approved, rejected, pending).</rdfs:comment>
+  </owl:Class>
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#Standard">
+    <rdfs:label>Standard</rdfs:label>
+    <rdfs:comment>A mandatory or advisory quality/governance standard that applies to delivery phases and artifacts.</rdfs:comment>
+  </owl:Class>
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#Template">
+    <rdfs:label>Template</rdfs:label>
+    <rdfs:comment>A reusable document or artifact template that accelerates delivery task completion.</rdfs:comment>
+  </owl:Class>
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#DefinitionOfDone">
+    <rdfs:label>Definition of Done</rdfs:label>
+    <rdfs:comment>A set of criteria, mandatory artifacts, and approvals that must be met for a phase to be considered complete.</rdfs:comment>
   </owl:Class>
 
   <!-- ═══════════════════════════════════════════════════════════════════════
@@ -159,6 +189,23 @@
   <!-- ═══════════════════════════════════════════════════════════════════════
        ENUMERATIONS (Named Individuals as OWL OneOf)
        ═══════════════════════════════════════════════════════════════════════ -->
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#DeliveryPhaseName">
+    <rdfs:label>Delivery Phase Name</rdfs:label>
+    <rdfs:comment>Standard delivery phases from Discovery through Operations, plus Transition to BAU.</rdfs:comment>
+    <owl:oneOf rdf:parseType="Collection">
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#DISCOVERY"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#REQUIREMENTS"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#ARCHITECTURE"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#DESIGN"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#DEVELOPMENT"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#TESTING"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#RELEASE"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#DEPLOYMENT"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#OPERATIONS"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#TRANSITION_TO_BAU"/>
+    </owl:oneOf>
+  </owl:Class>
 
   <owl:Class rdf:about="http://example.org/ontology/data-sdlc#RiskLevel">
     <rdfs:label>Risk Level</rdfs:label>
@@ -222,6 +269,17 @@
       <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#INFERRED"/>
       <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#LIKELY"/>
       <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#CONFIRMED"/>
+    </owl:oneOf>
+  </owl:Class>
+
+  <owl:Class rdf:about="http://example.org/ontology/data-sdlc#ArtifactStatus">
+    <rdfs:label>Artifact Status</rdfs:label>
+    <owl:oneOf rdf:parseType="Collection">
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#ARTIFACT_NOT_STARTED"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#ARTIFACT_IN_PROGRESS"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#ARTIFACT_DRAFT"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#ARTIFACT_REVIEWED"/>
+      <owl:NamedIndividual rdf:about="http://example.org/ontology/data-sdlc#ARTIFACT_APPROVED"/>
     </owl:oneOf>
   </owl:Class>
 
@@ -324,10 +382,62 @@
     <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
   </owl:ObjectProperty>
 
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#hasActivity">
+    <rdfs:label>has activity</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryActivity"/>
+  </owl:ObjectProperty>
+
   <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#hasGate">
     <rdfs:label>has gate</rdfs:label>
     <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
     <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#ApprovalGate"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#hasArtifact">
+    <rdfs:label>has artifact</rdfs:label>
+    <rdfs:comment>Links a task or activity to its produced delivery artifact.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#hasRole">
+    <rdfs:label>has role</rdfs:label>
+    <rdfs:comment>Associates a phase or task with a responsible delivery role.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryRole"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#hasStandard">
+    <rdfs:label>has standard</rdfs:label>
+    <rdfs:comment>Associates a phase or task with an applicable standard.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Standard"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#hasTemplate">
+    <rdfs:label>has template</rdfs:label>
+    <rdfs:comment>Associates a task or artifact with a reusable template.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryTask"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Template"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#hasDefinitionOfDone">
+    <rdfs:label>has definition of done</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DefinitionOfDone"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#artifactFromTemplate">
+    <rdfs:label>artifact from template</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Template"/>
+  </owl:ObjectProperty>
+
+  <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#artifactMeetsStandard">
+    <rdfs:label>artifact meets standard</rdfs:label>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#Standard"/>
   </owl:ObjectProperty>
 
   <owl:ObjectProperty rdf:about="http://example.org/ontology/data-sdlc#requiresEvidence">
@@ -449,6 +559,26 @@
     <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
   </owl:DatatypeProperty>
 
+  <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#purpose">
+    <rdfs:label>purpose</rdfs:label>
+    <rdfs:comment>The stated purpose of a delivery phase or task.</rdfs:comment>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#entryCriteria">
+    <rdfs:label>entry criteria</rdfs:label>
+    <rdfs:comment>Conditions that must be met before a phase can begin.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#exitCriteria">
+    <rdfs:label>exit criteria</rdfs:label>
+    <rdfs:comment>Conditions that must be met before a phase can be considered complete.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </owl:DatatypeProperty>
+
   <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#platform">
     <rdfs:label>platform</rdfs:label>
     <rdfs:comment>The cloud or data platform (BigQuery, BigLake, PubSub, GCS, etc.)</rdfs:comment>
@@ -524,6 +654,26 @@
     <rdfs:label>business purpose</rdfs:label>
     <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryType"/>
     <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#artifactType">
+    <rdfs:label>artifact type</rdfs:label>
+    <rdfs:comment>The type of delivery artifact (document, model, code, report, specification, runbook).</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#category">
+    <rdfs:label>category</rdfs:label>
+    <rdfs:comment>Classification category for standards, policies, or evidence.</rdfs:comment>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+  </owl:DatatypeProperty>
+
+  <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#mandatory">
+    <rdfs:label>mandatory</rdfs:label>
+    <rdfs:comment>Whether a standard or criterion is mandatory.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#Standard"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#boolean"/>
   </owl:DatatypeProperty>
 
   <owl:DatatypeProperty rdf:about="http://example.org/ontology/data-sdlc#timestamp">

@@ -82,16 +82,55 @@ const CLASSES: OntologyClass[] = [
     { name: 'derivedFromBlueprint', range: 'DeliveryBlueprint', type: 'object' },
     { name: 'hasPhase', range: 'DeliveryPhase', type: 'object' },
   ]},
-  { id: 'DeliveryPhase', label: 'Delivery Phase', comment: 'A sequential stage in a delivery plan.', domain: 'delivery', properties: [
+  { id: 'DeliveryPhase', label: 'Delivery Phase', comment: 'A sequential stage (Discovery, Requirements, Architecture, Design, Development, Testing, Release, Deployment, Operations, Transition to BAU).', domain: 'delivery', properties: [
     { name: 'hasTask', range: 'DeliveryTask', type: 'object' },
+    { name: 'hasActivity', range: 'DeliveryActivity', type: 'object' },
     { name: 'hasGate', range: 'ApprovalGate', type: 'object' },
+    { name: 'hasRole', range: 'DeliveryRole', type: 'object' },
+    { name: 'hasStandard', range: 'Standard', type: 'object' },
+    { name: 'hasTemplate', range: 'Template', type: 'object' },
+    { name: 'hasDefinitionOfDone', range: 'DefinitionOfDone', type: 'object' },
+    { name: 'phaseName', range: 'DeliveryPhaseName', type: 'datatype' },
     { name: 'sequence', range: 'xsd:integer', type: 'datatype' },
+    { name: 'purpose', range: 'xsd:string', type: 'datatype' },
+    { name: 'entryCriteria', range: 'xsd:string', type: 'datatype' },
+    { name: 'exitCriteria', range: 'xsd:string', type: 'datatype' },
   ]},
   { id: 'DeliveryTask', label: 'Delivery Task', comment: 'A unit of work within a phase with inputs, outputs, and acceptance criteria.', domain: 'delivery', properties: [
     { name: 'requiresAgent', range: 'Agent', type: 'object' },
     { name: 'hasChecklist', range: 'ChecklistItem', type: 'object' },
     { name: 'hasAcceptanceCriterion', range: 'AcceptanceCriterion', type: 'object' },
+    { name: 'hasArtifact', range: 'DeliveryArtifact', type: 'object' },
+    { name: 'hasTemplate', range: 'Template', type: 'object' },
     { name: 'status', range: 'TaskStatus', type: 'datatype' },
+    { name: 'purpose', range: 'xsd:string', type: 'datatype' },
+  ]},
+  { id: 'DeliveryActivity', label: 'Delivery Activity', comment: 'A grouping of related work within a phase, containing tasks and producing artifacts.', domain: 'delivery', properties: [
+    { name: 'hasArtifact', range: 'DeliveryArtifact', type: 'object' },
+    { name: 'sequence', range: 'xsd:integer', type: 'datatype' },
+    { name: 'description', range: 'xsd:string', type: 'datatype' },
+  ]},
+  { id: 'DeliveryArtifact', label: 'Delivery Artifact', comment: 'A tangible output (document, model, specification, report, runbook) produced by a task or activity.', domain: 'delivery', properties: [
+    { name: 'artifactFromTemplate', range: 'Template', type: 'object' },
+    { name: 'artifactMeetsStandard', range: 'Standard', type: 'object' },
+    { name: 'artifactType', range: 'xsd:string', type: 'datatype' },
+    { name: 'status', range: 'ArtifactStatus', type: 'datatype' },
+  ]},
+  { id: 'DeliveryRole', label: 'Delivery Role', comment: 'A human or organisational role responsible for tasks, approvals, or artifact ownership.', domain: 'delivery', properties: [
+    { name: 'name', range: 'xsd:string', type: 'datatype' },
+    { name: 'description', range: 'xsd:string', type: 'datatype' },
+  ]},
+  { id: 'Standard', label: 'Standard', comment: 'A mandatory or advisory quality/governance standard applying to phases and artifacts.', domain: 'delivery', properties: [
+    { name: 'category', range: 'xsd:string', type: 'datatype' },
+    { name: 'mandatory', range: 'xsd:boolean', type: 'datatype' },
+    { name: 'version', range: 'xsd:string', type: 'datatype' },
+  ]},
+  { id: 'Template', label: 'Template', comment: 'A reusable document or artifact template that accelerates delivery task completion.', domain: 'delivery', properties: [
+    { name: 'artifactType', range: 'xsd:string', type: 'datatype' },
+    { name: 'format', range: 'xsd:string', type: 'datatype' },
+  ]},
+  { id: 'DefinitionOfDone', label: 'Definition of Done', comment: 'Criteria, mandatory artifacts, and approvals that must be met for a phase to be complete.', domain: 'delivery', properties: [
+    { name: 'phase', range: 'xsd:string', type: 'datatype' },
   ]},
   { id: 'ApprovalGate', label: 'Approval Gate', comment: 'A quality checkpoint that must pass before the next phase.', domain: 'delivery', properties: [
     { name: 'requiresEvidence', range: 'Evidence', type: 'object' },
@@ -146,7 +185,15 @@ const RELATIONS: OntologyRelation[] = [
   { from: 'DeliveryBlueprint', to: 'DeliveryType', label: 'blueprintForType' },
   { from: 'DeliveryPlan', to: 'DeliveryPhase', label: 'hasPhase' },
   { from: 'DeliveryPhase', to: 'DeliveryTask', label: 'hasTask' },
+  { from: 'DeliveryPhase', to: 'DeliveryActivity', label: 'hasActivity' },
   { from: 'DeliveryPhase', to: 'ApprovalGate', label: 'hasGate' },
+  { from: 'DeliveryPhase', to: 'DeliveryRole', label: 'hasRole' },
+  { from: 'DeliveryPhase', to: 'Standard', label: 'hasStandard' },
+  { from: 'DeliveryPhase', to: 'DefinitionOfDone', label: 'hasDefinitionOfDone' },
+  { from: 'DeliveryTask', to: 'DeliveryArtifact', label: 'hasArtifact' },
+  { from: 'DeliveryTask', to: 'Template', label: 'hasTemplate' },
+  { from: 'DeliveryArtifact', to: 'Template', label: 'artifactFromTemplate' },
+  { from: 'DeliveryArtifact', to: 'Standard', label: 'artifactMeetsStandard' },
   { from: 'ApprovalGate', to: 'Evidence', label: 'requiresEvidence' },
   { from: 'DeliveryTask', to: 'Agent', label: 'requiresAgent' },
   { from: 'Agent', to: 'Skill', label: 'hasSkill' },
@@ -160,12 +207,14 @@ const RELATIONS: OntologyRelation[] = [
 ];
 
 const ENUMERATIONS = [
+  { name: 'DeliveryPhaseName', values: ['DISCOVERY', 'REQUIREMENTS', 'ARCHITECTURE', 'DESIGN', 'DEVELOPMENT', 'TESTING', 'RELEASE', 'DEPLOYMENT', 'OPERATIONS', 'TRANSITION_TO_BAU'] },
   { name: 'RiskLevel', values: ['HIGH', 'MEDIUM', 'LOW'] },
   { name: 'AutonomyLevel', values: ['AUTOMATIC', 'SEMI_AUTOMATIC', 'APPROVAL_REQUIRED'] },
   { name: 'CertificationStatus', values: ['CERTIFIED', 'EVALUATING', 'DEPRECATED'] },
   { name: 'AssetStatus', values: ['ACTIVE', 'MIGRATING', 'DEPRECATED'] },
   { name: 'TaskStatus', values: ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED'] },
   { name: 'GateStatus', values: ['PASSED', 'BLOCKED', 'PENDING'] },
+  { name: 'ArtifactStatus', values: ['NOT_STARTED', 'IN_PROGRESS', 'DRAFT', 'REVIEWED', 'APPROVED'] },
   { name: 'EvidenceConfidence', values: ['OBSERVED', 'INFERRED', 'LIKELY', 'CONFIRMED'] },
 ];
 
