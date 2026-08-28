@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import json
+import uuid
 from pathlib import Path
 
 root_dir = Path(__file__).resolve().parent.parent.parent
@@ -50,6 +51,82 @@ delivery_types_data = load_json("marketplace/delivery_types.json")
 agents_data = load_json("marketplace/agents.json")
 project_seed = load_json("demo/project_seed.json")
 
+# AgentCore invocation helper
+import boto3
+
+_runtime_config_path = root_dir / "runtime_config.json"
+_runtime_config = {}
+if _runtime_config_path.exists():
+    with open(_runtime_config_path) as f:
+        _runtime_config = json.load(f)
+
+
+import time as _time
+import logging
+
+logging.basicConfig(level=logging.INFO)
+_logger = logging.getLogger("agentcore_trace")
+
+_invocation_log = []  # in-memory trace log for the UI
+
+
+def invoke_agentcore(action: str, **kwargs) -> dict:
+    """Invoke the deployed AgentCore runtime and return parsed response."""
+    if not _runtime_config:
+        return {"error": "No runtime_config.json found — agent not deployed"}
+    client = boto3.client("bedrock-agentcore", region_name=_runtime_config["region"])
+    payload = {"action": action, **kwargs}
+    session_id = str(uuid.uuid4())
+
+    trace_entry = {
+        "timestamp": _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime()),
+        "session_id": session_id,
+        "action": action,
+        "runtime_arn": _runtime_config["runtime_arn"],
+        "request_payload": payload,
+    }
+
+    _logger.info("→ AgentCore INVOKE | action=%s | session=%s | arn=%s",
+                 action, session_id, _runtime_config["runtime_arn"])
+
+    start = _time.time()
+    response = client.invoke_agent_runtime(
+        agentRuntimeArn=_runtime_config["runtime_arn"],
+        runtimeSessionId=session_id,
+        payload=json.dumps(payload).encode("utf-8"),
+    )
+    elapsed_ms = int((_time.time() - start) * 1000)
+
+    body = response.get("response")
+    if hasattr(body, "read"):
+        raw = body.read().decode("utf-8")
+    else:
+        raw = str(body)
+
+    status_code = response.get("statusCode", 0)
+    trace_entry["status_code"] = status_code
+    trace_entry["latency_ms"] = elapsed_ms
+    trace_entry["response_metadata"] = response.get("ResponseMetadata", {})
+
+    _logger.info("← AgentCore RESPONSE | action=%s | status=%s | latency=%dms",
+                 action, status_code, elapsed_ms)
+
+    try:
+        result = json.loads(raw)
+        if isinstance(result, str):
+            result = json.loads(result)
+        trace_entry["response_payload"] = result
+    except (json.JSONDecodeError, TypeError):
+        result = {"raw": raw}
+        trace_entry["response_payload"] = raw
+
+    _invocation_log.append(trace_entry)
+    # Keep only last 50 traces
+    if len(_invocation_log) > 50:
+        _invocation_log.pop(0)
+
+    return result
+
 # Instantiate domain services
 classifier = DeliveryTypeClassifier(delivery_types_data, [
     {"id": "BP-MIG-01", "delivery_type_id": "DATA_PLATFORM_MIGRATION", "phases": [
@@ -83,7 +160,13 @@ async def start_harness():
 
 @app.get("/api/status")
 def read_root():
-    return {"system": "Agentic Data Engineering Platform API", "status": "ONLINE"}
+    return {
+        "system": "Agentic Data Engineering Platform API",
+        "status": "ONLINE",
+        "mode": harness_config.mode,
+        "agentcore_runtime": _runtime_config.get("runtime_arn", "NOT CONFIGURED"),
+        "agentcore_connected": bool(_runtime_config),
+    }
 
 @app.get("/api/delivery-types")
 def get_delivery_types():
@@ -92,7 +175,14 @@ def get_delivery_types():
 @app.post("/api/classify")
 def classify_prompt(payload: dict):
     prompt = payload.get("prompt", "Move data warehouse to cloud lakehouse")
-    return classifier.classify_request(prompt)
+    if harness_config.mode == SystemMode.REAL:
+        result = invoke_agentcore("classify", prompt=prompt)
+        result["_source"] = "AGENTCORE_RUNTIME"
+        result["_runtime_arn"] = _runtime_config.get("runtime_arn", "")
+        return result
+    result = classifier.classify_request(prompt)
+    result["_source"] = "LOCAL_DEMO"
+    return result
 
 @app.post("/api/plan")
 def create_delivery_plan(payload: dict):
@@ -114,9 +204,15 @@ def get_digital_twin():
 
 @app.get("/api/impact/{change_id}")
 def get_impact_analysis(change_id: str):
+    if harness_config.mode == SystemMode.REAL:
+        result = invoke_agentcore("impact", change_id=change_id)
+        result["_source"] = "AGENTCORE_RUNTIME"
+        result["_runtime_arn"] = _runtime_config.get("runtime_arn", "")
+        return result
     return {
         "technical_impact": graph_engine.compute_technical_impact(change_id),
-        "delivery_impact": graph_engine.compute_delivery_impact(change_id)
+        "delivery_impact": graph_engine.compute_delivery_impact(change_id),
+        "_source": "LOCAL_DEMO",
     }
 
 @app.get("/api/testing/{change_id}")
@@ -156,6 +252,12 @@ def get_cli_commands():
             "gh copilot agent run --agent migration-architect-agent --prompt 'Generate storage mapping'"
         ]
     }
+
+@app.get("/api/traces")
+def get_traces():
+    """Returns the last 50 AgentCore invocation traces."""
+    return {"mode": harness_config.mode, "traces": list(reversed(_invocation_log))}
+
 
 @app.get("/api/harness/mode")
 def get_harness_mode():
@@ -203,7 +305,7 @@ if dist_dir.exists():
         file_path = dist_dir / full_path
         if file_path.is_file():
             return FileResponse(str(file_path))
-        return FileResponse(str(dist_dir / "index.html"))
+        return FileResponse(str(dist_dir / "index.html"), headers={"Cache-Control": "no-cache"})
 
 if __name__ == "__main__":
     import uvicorn

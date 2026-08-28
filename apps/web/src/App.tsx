@@ -18,10 +18,14 @@ import { OntologyExplorer } from './components/OntologyExplorer';
 
 import { fetchDeliveryTypes, fetchAgents, DeliveryType, Agent } from './services/api';
 
+const API_BASE = './api';
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('project_onboarding');
   const [deliveryTypes, setDeliveryTypes] = useState<DeliveryType[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [harnessMode, setHarnessMode] = useState<string>('DEMO');
+  const [runtimeArn, setRuntimeArn] = useState<string>('');
   const [demoState, setDemoState] = useState({
     current_step: 1,
     total_steps: 9,
@@ -34,7 +38,24 @@ export default function App() {
   useEffect(() => {
     fetchDeliveryTypes().then(setDeliveryTypes);
     fetchAgents().then(setAgents);
+    fetch(`${API_BASE}/status`).then(r => r.json()).then(data => {
+      setHarnessMode(data.mode || 'DEMO');
+      setRuntimeArn(data.agentcore_runtime || '');
+    }).catch(() => {});
   }, []);
+
+  const toggleMode = async () => {
+    const newMode = harnessMode === 'REAL' ? 'DEMO' : 'REAL';
+    const res = await fetch(`${API_BASE}/harness/mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: newMode })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setHarnessMode(data.mode);
+    }
+  };
 
   const handleNextDemoStep = () => {
     const nextStep = Math.min(demoState.current_step + 1, demoState.total_steps);
@@ -81,6 +102,34 @@ export default function App() {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
       <div className="flex-1 flex flex-col min-h-screen relative z-10 overflow-hidden">
+        {/* AgentCore Mode Banner */}
+        <div className={`px-4 py-2 flex items-center justify-between text-sm font-mono ${
+          harnessMode === 'REAL'
+            ? 'bg-emerald-900/80 border-b border-emerald-500/50 text-emerald-200'
+            : 'bg-amber-900/80 border-b border-amber-500/50 text-amber-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className={`inline-block w-2 h-2 rounded-full ${
+              harnessMode === 'REAL' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+            }`} />
+            <span>
+              {harnessMode === 'REAL'
+                ? `AGENTCORE RUNTIME — ${runtimeArn}`
+                : 'LOCAL DEMO MODE — responses served locally'}
+            </span>
+          </div>
+          <button
+            onClick={toggleMode}
+            className={`px-3 py-1 rounded text-xs font-semibold transition ${
+              harnessMode === 'REAL'
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                : 'bg-amber-600 hover:bg-amber-500 text-white'
+            }`}
+          >
+            Switch to {harnessMode === 'REAL' ? 'DEMO' : 'AGENTCORE'}
+          </button>
+        </div>
+
         <TopBar onResetDemo={handleResetDemo} />
 
         <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
