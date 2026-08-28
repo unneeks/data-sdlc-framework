@@ -12,8 +12,9 @@ from domain.orchestration import SystemMode
 
 class HarnessConfig:
     def __init__(self) -> None:
-        self.mode: SystemMode = SystemMode.DEMO
-        self.aws_region: str = os.getenv("AGENTCORE_AWS_REGION", "us-east-1")
+        default_mode = os.getenv("HARNESS_MODE", "DEMO")
+        self.mode: SystemMode = SystemMode(default_mode)
+        self.aws_region: str = os.getenv("AGENTCORE_AWS_REGION", "us-west-2")
         self.agent_runtime_arn: str = os.getenv("AGENTCORE_RUNTIME_ARN", "")
 
 

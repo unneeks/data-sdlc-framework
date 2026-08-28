@@ -1,0 +1,7 @@
+{
+  "agent_name": "data_sdlc_framework_96560",
+  "runtime_id": "data_sdlc_framework_96560-4BNuH1DiKv",
+  "runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:runtime/data_sdlc_framework_96560-4BNuH1DiKv",
+  "endpoint_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:runtime/data_sdlc_framework_96560-4BNuH1DiKv/runtime-endpoint/default",
+  "region": "us-west-2"
+}
