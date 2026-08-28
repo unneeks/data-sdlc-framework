@@ -1,0 +1,72 @@
+{
+  "project": {
+    "id": "PRJ-ATLAS-2026",
+    "name": "Project ATLAS — Banking Data Platform Migration",
+    "description": "Automated Transformation of Legacy Analytics Systems: Migrates Meridian Bank's Oracle DWH (v19c) to an AWS-based open-source lakehouse architecture (Iceberg on S3).",
+    "delivery_type": "DATA_PLATFORM_MIGRATION",
+    "baseline_risk": "HIGH",
+    "domain": "Financial Services (Retail & Commercial Banking)",
+    "technology_stack": ["Oracle DWH 19c", "Apache Spark 3.5", "Apache Kafka", "Apache Iceberg", "dbt Core 1.8", "Apache Airflow 2.9", "Great Expectations 0.18", "OpenMetadata 1.4", "Trino 450", "Apache Superset 4.0", "Terraform 1.7", "GitHub Actions"],
+    "data_domains": ["Customer Accounts", "Transactions", "Risk Scores", "Regulatory Reports", "FX Rates", "Counterparty Data"],
+    "data_assets_count": 108,
+    "pipelines_count": 42,
+    "regulatory_frameworks": ["FCA SYSC 15A", "PRA SS1/21", "GDPR / UK DPA 2018", "Basel III/IV", "IFRS 9", "SOX ITGC"]
+  },
+  "data_assets": [
+    {"id": "A-01", "name": "raw_banking.customer_accounts", "asset_type": "iceberg_table", "platform": "S3 / Iceberg", "schema_name": "raw_banking", "domain": "Customer Accounts", "row_count": "45M+"},
+    {"id": "A-02", "name": "raw_banking.transactions", "asset_type": "iceberg_table", "platform": "S3 / Iceberg", "schema_name": "raw_banking", "domain": "Transactions", "row_count": "2B+/year"},
+    {"id": "A-03", "name": "raw_banking.risk_scores", "asset_type": "iceberg_table", "platform": "S3 / Iceberg", "schema_name": "raw_banking", "domain": "Risk Scores", "row_count": "12M"},
+    {"id": "A-04", "name": "staging.stg_customer_accounts", "asset_type": "view", "platform": "dbt / Trino", "schema_name": "staging", "domain": "Customer Accounts"},
+    {"id": "A-05", "name": "staging.stg_transactions", "asset_type": "view", "platform": "dbt / Trino", "schema_name": "staging", "domain": "Transactions"},
+    {"id": "A-06", "name": "staging.stg_risk_scores", "asset_type": "view", "platform": "dbt / Trino", "schema_name": "staging", "domain": "Risk Scores"},
+    {"id": "A-07", "name": "intermediate.int_customer_enriched", "asset_type": "ephemeral", "platform": "dbt", "schema_name": "intermediate", "domain": "Customer Accounts"},
+    {"id": "A-08", "name": "intermediate.int_daily_transaction_summary", "asset_type": "ephemeral", "platform": "dbt", "schema_name": "intermediate", "domain": "Transactions"},
+    {"id": "A-09", "name": "marts.mart_customer_360", "asset_type": "iceberg_table", "platform": "dbt / Trino / Iceberg", "schema_name": "marts", "domain": "Customer Accounts"},
+    {"id": "A-10", "name": "marts.mart_transaction_analytics", "asset_type": "iceberg_table", "platform": "dbt / Trino / Iceberg", "schema_name": "marts", "domain": "Transactions"},
+    {"id": "A-11", "name": "marts.mart_regulatory_exposure", "asset_type": "iceberg_table", "platform": "dbt / Trino / Iceberg", "schema_name": "marts", "domain": "Regulatory Reports"},
+    {"id": "A-12", "name": "meta.test_results", "asset_type": "iceberg_table", "platform": "S3 / Iceberg", "schema_name": "meta", "domain": "Governance"}
+  ],
+  "pipelines": [
+    {"id": "P-01", "name": "customer_accounts_ingestion.py", "pipeline_type": "Spark CDC", "schedule": "Daily 02:00 UTC", "sla": "< 2 hours", "source": "Oracle DWH", "target": "raw_banking.customer_accounts"},
+    {"id": "P-02", "name": "transactions_streaming.py", "pipeline_type": "Spark Streaming", "schedule": "Continuous", "sla": "< 5 min lag", "source": "Kafka CDC", "target": "raw_banking.transactions"},
+    {"id": "P-03", "name": "risk_scores_batch.py", "pipeline_type": "Spark Batch", "schedule": "Daily 03:00 UTC", "sla": "< 1 hour", "source": "Oracle DWH", "target": "raw_banking.risk_scores"},
+    {"id": "P-04", "name": "daily_ingestion_dag.py", "pipeline_type": "Airflow DAG", "schedule": "Daily 02:00 UTC", "sla": "< 2 hours", "source": "Orchestration", "target": "All domains"},
+    {"id": "P-05", "name": "daily_dbt_dag.py", "pipeline_type": "Airflow DAG", "schedule": "Daily 04:30 UTC", "sla": "< 1 hour", "source": "dbt", "target": "staging → intermediate → marts"},
+    {"id": "P-06", "name": "data_quality_dag.py", "pipeline_type": "Airflow DAG", "schedule": "Daily 06:00 UTC", "sla": "< 30 min", "source": "Quality", "target": "All domains"},
+    {"id": "P-07", "name": "reconciliation_dag.py", "pipeline_type": "Airflow DAG", "schedule": "Daily 06:30 UTC", "sla": "< 1 hour", "source": "Reconciliation", "target": "Oracle vs Iceberg comparison"},
+    {"id": "P-08", "name": "maintenance_compaction_dag.py", "pipeline_type": "Airflow DAG", "schedule": "Weekly Sunday 00:00 UTC", "sla": "< 4 hours", "source": "Maintenance", "target": "Iceberg compaction & cleanup"}
+  ],
+  "delivery_phases": [
+    {"phase": 1, "name": "Discovery", "status": "COMPLETED", "gate": "Business Case Approved"},
+    {"phase": 2, "name": "Requirements", "status": "COMPLETED", "gate": "Requirements Sign-off"},
+    {"phase": 3, "name": "Architecture", "status": "COMPLETED", "gate": "Architecture Review Board"},
+    {"phase": 4, "name": "Design", "status": "COMPLETED", "gate": "Design Authority Approval"},
+    {"phase": 5, "name": "Development", "status": "COMPLETED", "gate": "Code Complete"},
+    {"phase": 6, "name": "Testing", "status": "COMPLETED", "gate": "Test Exit Criteria Met"},
+    {"phase": 7, "name": "Release", "status": "COMPLETED", "gate": "Release Readiness Gate"},
+    {"phase": 8, "name": "Deployment", "status": "COMPLETED", "gate": "Go-Live Approval"},
+    {"phase": 9, "name": "Operations", "status": "IN_PROGRESS", "gate": "Operational Stability"},
+    {"phase": 10, "name": "Transition to BAU", "status": "NOT_STARTED", "gate": "BAU Handover Complete"}
+  ],
+  "test_strategy": {
+    "layers": ["Unit", "Integration", "Regression", "Performance", "E2E", "Security"],
+    "reconciliation": {
+      "row_count_tolerance": "±0.01%",
+      "aggregate_tolerance": "±0.001%",
+      "regulatory_tolerance": "Exact match",
+      "dual_run_requirement": "10 consecutive business days pass"
+    },
+    "quality_checks": {
+      "dbt_tests": "400+ across all models",
+      "great_expectations": "statistical distribution, volume anomaly, schema validation",
+      "soda": "PII leakage scans, format compliance (sort codes, IBANs)"
+    },
+    "performance_targets": {
+      "p95_bi_query_latency": "< 10 seconds",
+      "batch_pipeline_completion": "< 2 hours",
+      "streaming_latency_cdc_to_bronze": "< 5 minutes",
+      "spark_autoscale_response": "< 3 minutes",
+      "concurrent_trino_users": 50
+    }
+  }
+}

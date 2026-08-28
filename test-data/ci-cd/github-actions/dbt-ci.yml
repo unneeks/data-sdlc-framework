@@ -1,0 +1,387 @@
+# Project ATLAS — dbt CI Pipeline
+# Runs on PRs that modify dbt models, tests, or macros
+# Compiles, tests against staging, generates docs, and posts schema changes as PR comment
+
+name: dbt CI
+
+on:
+  pull_request:
+    branches: [main, 'release/**']
+    paths:
+      - 'code/transformation/**'
+      - 'dbt_project.yml'
+      - 'packages.yml'
+
+env:
+  AWS_REGION: us-east-1
+  DBT_PROFILES_DIR: ./code/transformation
+  DBT_TARGET: ci_staging
+  PYTHON_VERSION: "3.11"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # dbt Compile: Validate project compiles cleanly
+  # ─────────────────────────────────────────────────────────────────────────────
+  compile:
+    name: dbt Compile
+    runs-on: ubuntu-latest
+    outputs:
+      manifest_path: ${{ steps.compile.outputs.manifest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dbt
+        run: |
+          pip install dbt-core==1.8.0 dbt-glue==1.8.0
+          dbt --version
+
+      - name: dbt deps
+        working-directory: code/transformation
+        run: dbt deps
+
+      - name: dbt compile
+        id: compile
+        working-directory: code/transformation
+        run: |
+          dbt compile --target ${{ env.DBT_TARGET }}
+          echo "manifest=code/transformation/target/manifest.json" >> "$GITHUB_OUTPUT"
+
+      - name: Check for compilation warnings
+        working-directory: code/transformation
+        run: |
+          python -c "
+          import json
+          with open('target/run_results.json', 'r') as f:
+              results = json.load(f)
+          warnings = [r for r in results.get('results', []) if r.get('status') == 'warn']
+          if warnings:
+              print(f'::warning::{len(warnings)} compilation warning(s) detected')
+              for w in warnings:
+                  print(f'  - {w.get(\"unique_id\")}: {w.get(\"message\", \"\")}')
+          " 2>/dev/null || true
+
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-manifest-pr
+          path: code/transformation/target/manifest.json
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # dbt Test: Run tests against staging environment
+  # ─────────────────────────────────────────────────────────────────────────────
+  test:
+    name: dbt Test (Staging)
+    runs-on: ubuntu-latest
+    needs: [compile]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dbt
+        run: pip install dbt-core==1.8.0 dbt-glue==1.8.0
+
+      - name: Determine modified models
+        id: modified
+        run: |
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD -- code/transformation/models/)
+          if [ -n "$CHANGED_FILES" ]; then
+            # Convert file paths to dbt model selectors
+            MODELS=$(echo "$CHANGED_FILES" | \
+              sed 's|code/transformation/models/||' | \
+              sed 's|\.sql$||' | \
+              sed 's|/|.|g' | \
+              tr '\n' ' ')
+            echo "models=$MODELS" >> "$GITHUB_OUTPUT"
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Modified models: $MODELS"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No model changes detected"
+          fi
+
+      - name: dbt deps
+        working-directory: code/transformation
+        run: dbt deps
+
+      - name: Run modified models in staging
+        if: steps.modified.outputs.has_changes == 'true'
+        working-directory: code/transformation
+        run: |
+          dbt run \
+            --target ${{ env.DBT_TARGET }} \
+            --select state:modified+ \
+            --defer \
+            --state ./target/ \
+            --full-refresh
+
+      - name: Run dbt tests
+        working-directory: code/transformation
+        run: |
+          dbt test \
+            --target ${{ env.DBT_TARGET }} \
+            --select state:modified+ \
+            --defer \
+            --state ./target/ \
+            --store-failures
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-test-results
+          path: |
+            code/transformation/target/run_results.json
+            code/transformation/target/sources.json
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Schema Changes: Detect and report model schema changes
+  # ─────────────────────────────────────────────────────────────────────────────
+  schema-changes:
+    name: Detect Schema Changes
+    runs-on: ubuntu-latest
+    needs: [compile]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout main manifest
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-branch
+          sparse-checkout: code/transformation/target/manifest.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download PR manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: dbt-manifest-pr
+          path: pr-manifest/
+
+      - name: Compare schemas
+        id: diff
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import json
+          import os
+          from pathlib import Path
+
+          # Load manifests
+          pr_manifest_path = Path("pr-manifest/manifest.json")
+          main_manifest_path = Path("main-branch/code/transformation/target/manifest.json")
+
+          if not pr_manifest_path.exists():
+              print("PR manifest not found")
+              exit(0)
+
+          pr_manifest = json.loads(pr_manifest_path.read_text())
+
+          if main_manifest_path.exists():
+              main_manifest = json.loads(main_manifest_path.read_text())
+          else:
+              main_manifest = {"nodes": {}}
+              print("No main manifest found — treating all models as new")
+
+          changes = []
+          pr_nodes = pr_manifest.get("nodes", {})
+          main_nodes = main_manifest.get("nodes", {})
+
+          # Detect new models
+          new_models = set(pr_nodes.keys()) - set(main_nodes.keys())
+          for model_id in sorted(new_models):
+              if pr_nodes[model_id].get("resource_type") == "model":
+                  node = pr_nodes[model_id]
+                  cols = list(node.get("columns", {}).keys())
+                  changes.append(f"### :new: New Model: `{node['name']}`\n"
+                                 f"- Schema: `{node.get('schema', 'default')}`\n"
+                                 f"- Columns: {', '.join(f'`{c}`' for c in cols[:10])}"
+                                 f"{'...' if len(cols) > 10 else ''}\n")
+
+          # Detect removed models
+          removed_models = set(main_nodes.keys()) - set(pr_nodes.keys())
+          for model_id in sorted(removed_models):
+              if main_nodes[model_id].get("resource_type") == "model":
+                  node = main_nodes[model_id]
+                  changes.append(f"### :x: Removed Model: `{node['name']}`\n")
+
+          # Detect column changes in existing models
+          common_models = set(pr_nodes.keys()) & set(main_nodes.keys())
+          for model_id in sorted(common_models):
+              pr_node = pr_nodes[model_id]
+              main_node = main_nodes[model_id]
+              if pr_node.get("resource_type") != "model":
+                  continue
+
+              pr_cols = set(pr_node.get("columns", {}).keys())
+              main_cols = set(main_node.get("columns", {}).keys())
+
+              added_cols = pr_cols - main_cols
+              removed_cols = main_cols - pr_cols
+
+              if added_cols or removed_cols:
+                  change_lines = [f"### :pencil2: Modified Model: `{pr_node['name']}`\n"]
+                  if added_cols:
+                      change_lines.append(f"- **Added columns:** {', '.join(f'`{c}`' for c in sorted(added_cols))}")
+                  if removed_cols:
+                      change_lines.append(f"- **Removed columns:** {', '.join(f'`{c}`' for c in sorted(removed_cols))}")
+                  changes.append('\n'.join(change_lines) + '\n')
+
+          # Write output
+          if changes:
+              comment_body = "## dbt Schema Changes Detected\n\n" + "\n".join(changes)
+              comment_body += "\n---\n*Generated by ATLAS dbt CI*"
+          else:
+              comment_body = "## dbt Schema Changes\n\nNo schema changes detected in this PR.\n\n---\n*Generated by ATLAS dbt CI*"
+
+          # Write to file for PR comment
+          Path("schema-changes.md").write_text(comment_body)
+          print(comment_body)
+
+          # Set output
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"has_changes={'true' if changes else 'false'}\n")
+          PYTHON_SCRIPT
+
+      - name: Post schema changes as PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: dbt-schema-changes
+          path: schema-changes.md
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Docs: Generate and preview dbt documentation
+  # ─────────────────────────────────────────────────────────────────────────────
+  docs:
+    name: Generate dbt Docs
+    runs-on: ubuntu-latest
+    needs: [compile]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dbt
+        run: pip install dbt-core==1.8.0 dbt-glue==1.8.0
+
+      - name: Generate docs
+        working-directory: code/transformation
+        run: |
+          dbt deps
+          dbt docs generate --target ${{ env.DBT_TARGET }}
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-docs
+          path: |
+            code/transformation/target/catalog.json
+            code/transformation/target/manifest.json
+            code/transformation/target/index.html
+          retention-days: 7
+
+      - name: Check documentation coverage
+        working-directory: code/transformation
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import json
+
+          with open("target/manifest.json") as f:
+              manifest = json.load(f)
+
+          models = {k: v for k, v in manifest["nodes"].items()
+                    if v["resource_type"] == "model"}
+
+          undocumented = []
+          for model_id, model in models.items():
+              if not model.get("description"):
+                  undocumented.append(model["name"])
+              else:
+                  # Check column documentation
+                  cols = model.get("columns", {})
+                  undoc_cols = [c for c, meta in cols.items() if not meta.get("description")]
+                  if undoc_cols:
+                      undocumented.append(f"{model['name']} (columns: {', '.join(undoc_cols[:5])})")
+
+          if undocumented:
+              print(f"::warning::Found {len(undocumented)} models with incomplete documentation:")
+              for m in undocumented[:20]:
+                  print(f"  - {m}")
+          else:
+              print("All models are fully documented!")
+
+          # Calculate coverage percentage
+          total = len(models)
+          documented = total - len([m for m in undocumented if '(' not in m])
+          pct = (documented / total * 100) if total > 0 else 100
+          print(f"\nDocumentation coverage: {documented}/{total} ({pct:.1f}%)")
+          PYTHON_SCRIPT
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Status: Final check for branch protection
+  # ─────────────────────────────────────────────────────────────────────────────
+  dbt-ci-status:
+    name: dbt CI Status
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [compile, test, schema-changes, docs]
+    steps:
+      - name: Evaluate results
+        run: |
+          if [[ "${{ needs.compile.result }}" != "success" ]]; then
+            echo "::error::dbt compilation failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "::error::dbt tests failed"
+            exit 1
+          fi
+          echo "dbt CI passed successfully"

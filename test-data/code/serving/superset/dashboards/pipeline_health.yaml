@@ -1,0 +1,414 @@
+# =============================================================================
+# Apache Superset Dashboard Configuration — Pipeline Health Monitoring
+# Project ATLAS — Banking Data Platform
+# =============================================================================
+# Dashboard providing real-time visibility into data pipeline health,
+# ingestion latency, transformation success rates, and data quality metrics.
+# =============================================================================
+
+dashboard:
+  dashboard_title: "ATLAS Pipeline Health Monitor"
+  slug: "atlas-pipeline-health"
+  published: true
+  certified_by: "Data Engineering Lead"
+  certification_details: "Production dashboard - reviewed quarterly"
+
+  position_json:
+    ROOT_ID:
+      type: ROOT
+      id: ROOT_ID
+      children:
+        - HEADER_ID
+        - ROW_KPI
+        - ROW_INGESTION
+        - ROW_TRANSFORMATION
+        - ROW_DATA_QUALITY
+        - ROW_ALERTS
+
+  metadata:
+    owners:
+      - "data-engineering@atlasbank.co.uk"
+      - "platform-sre@atlasbank.co.uk"
+    refresh_frequency: 60
+    color_scheme: "atlasBank"
+    default_filters: {}
+    cross_filters_enabled: true
+    native_filter_configuration:
+      - id: "filter_date_range"
+        name: "Date Range"
+        filterType: "filter_time"
+        targets:
+          - datasetId: all
+        defaultDataMask:
+          extraFormData:
+            time_range: "Last 24 hours"
+      - id: "filter_pipeline"
+        name: "Pipeline"
+        filterType: "filter_select"
+        targets:
+          - column: pipeline_name
+            datasetId: pipeline_runs
+        controlValues:
+          multiSelect: true
+          enableEmptyFilter: false
+      - id: "filter_environment"
+        name: "Environment"
+        filterType: "filter_select"
+        targets:
+          - column: environment
+            datasetId: pipeline_runs
+        defaultDataMask:
+          extraFormData:
+            filters:
+              - col: environment
+                op: IN
+                val: ["production"]
+
+  css: |
+    .dashboard-component {
+      font-family: 'Inter', sans-serif;
+    }
+    .kpi-container .header-title {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+charts:
+  # --- KPI Row ---
+  - slice_name: "Pipeline Success Rate (24h)"
+    viz_type: big_number_total
+    datasource: pipeline_runs
+    params:
+      metric:
+        expressionType: SQL
+        sqlExpression: "CAST(SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(*) * 100"
+        label: "Success Rate %"
+      time_range: "Last 24 hours"
+      subheader: "Target: >= 99.5%"
+      y_axis_format: ".1f"
+      color_scheme: "supersetColors"
+      conditional_formatting:
+        - operator: "<"
+          value: 99.5
+          color: "#dc2626"
+        - operator: ">="
+          value: 99.5
+          color: "#16a34a"
+
+  - slice_name: "Total Records Ingested (24h)"
+    viz_type: big_number_total
+    datasource: pipeline_runs
+    params:
+      metric:
+        expressionType: SQL
+        sqlExpression: "SUM(records_processed)"
+        label: "Records Ingested"
+      time_range: "Last 24 hours"
+      subheader: "All pipelines combined"
+      y_axis_format: ",.0f"
+
+  - slice_name: "Avg Ingestion Latency"
+    viz_type: big_number_total
+    datasource: pipeline_runs
+    params:
+      metric:
+        expressionType: SQL
+        sqlExpression: "AVG(latency_seconds)"
+        label: "Avg Latency (s)"
+      time_range: "Last 1 hour"
+      subheader: "Target: < 30s for streaming"
+      y_axis_format: ".1f"
+      conditional_formatting:
+        - operator: ">"
+          value: 30
+          color: "#dc2626"
+        - operator: "<="
+          value: 30
+          color: "#16a34a"
+
+  - slice_name: "Failed Pipelines (24h)"
+    viz_type: big_number_total
+    datasource: pipeline_runs
+    params:
+      metric:
+        expressionType: SQL
+        sqlExpression: "SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END)"
+        label: "Failures"
+      time_range: "Last 24 hours"
+      subheader: "Requires immediate attention if > 0"
+      y_axis_format: "d"
+      conditional_formatting:
+        - operator: ">"
+          value: 0
+          color: "#dc2626"
+        - operator: "=="
+          value: 0
+          color: "#16a34a"
+
+  # --- Ingestion Monitoring ---
+  - slice_name: "Ingestion Throughput Over Time"
+    viz_type: echarts_timeseries_line
+    datasource: pipeline_runs
+    params:
+      metrics:
+        - expressionType: SQL
+          sqlExpression: "SUM(records_processed)"
+          label: "Records/min"
+      time_range: "Last 24 hours"
+      granularity_sqla: execution_timestamp
+      time_grain_sqla: PT1M
+      groupby:
+        - pipeline_name
+      rich_tooltip: true
+      show_legend: true
+      x_axis_title: "Time (UTC)"
+      y_axis_title: "Records Processed"
+      annotation_layers:
+        - name: "Baseline"
+          annotationType: FORMULA
+          value: "800000"
+          style: dashed
+          color: "#9ca3af"
+
+  - slice_name: "Ingestion Latency by Pipeline"
+    viz_type: echarts_timeseries_line
+    datasource: pipeline_runs
+    params:
+      metrics:
+        - expressionType: SQL
+          sqlExpression: "AVG(latency_seconds)"
+          label: "Avg Latency (s)"
+        - expressionType: SQL
+          sqlExpression: "MAX(latency_seconds)"
+          label: "P99 Latency (s)"
+      time_range: "Last 6 hours"
+      granularity_sqla: execution_timestamp
+      time_grain_sqla: PT5M
+      groupby:
+        - pipeline_name
+      show_legend: true
+      y_axis_title: "Latency (seconds)"
+      annotation_layers:
+        - name: "SLA Threshold"
+          annotationType: FORMULA
+          value: "30"
+          style: dashed
+          color: "#dc2626"
+
+  - slice_name: "CDC Lag by Source Table"
+    viz_type: echarts_timeseries_bar
+    datasource: cdc_metrics
+    params:
+      metrics:
+        - expressionType: SQL
+          sqlExpression: "MAX(lag_seconds)"
+          label: "Max CDC Lag (s)"
+      time_range: "Last 2 hours"
+      granularity_sqla: metric_timestamp
+      time_grain_sqla: PT1M
+      groupby:
+        - source_table
+      stack: false
+      y_axis_title: "Lag (seconds)"
+
+  # --- Transformation Monitoring ---
+  - slice_name: "dbt Model Run Status"
+    viz_type: echarts_timeseries_bar
+    datasource: dbt_run_results
+    params:
+      metrics:
+        - expressionType: SQL
+          sqlExpression: "SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)"
+          label: "Success"
+        - expressionType: SQL
+          sqlExpression: "SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END)"
+          label: "Error"
+        - expressionType: SQL
+          sqlExpression: "SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END)"
+          label: "Skipped"
+      time_range: "Last 7 days"
+      granularity_sqla: run_started_at
+      time_grain_sqla: P1D
+      stack: true
+      color_scheme: "atlas_status"
+
+  - slice_name: "dbt Model Execution Time"
+    viz_type: table
+    datasource: dbt_run_results
+    params:
+      metrics:
+        - expressionType: SQL
+          sqlExpression: "AVG(execution_time_seconds)"
+          label: "Avg Duration (s)"
+        - expressionType: SQL
+          sqlExpression: "MAX(execution_time_seconds)"
+          label: "Max Duration (s)"
+      groupby:
+        - model_name
+        - schema_name
+      time_range: "Last 24 hours"
+      order_by:
+        - - "Max Duration (s)"
+          - false
+      row_limit: 20
+      conditional_formatting:
+        - column: "Max Duration (s)"
+          operator: ">"
+          value: 300
+          color: "#fef2f2"
+
+  # --- Data Quality ---
+  - slice_name: "Data Quality Score Trend"
+    viz_type: echarts_timeseries_line
+    datasource: data_quality_results
+    params:
+      metrics:
+        - expressionType: SQL
+          sqlExpression: "AVG(quality_score) * 100"
+          label: "Quality Score %"
+      time_range: "Last 30 days"
+      granularity_sqla: check_timestamp
+      time_grain_sqla: P1D
+      groupby:
+        - domain
+      y_axis_title: "Quality Score (%)"
+      y_axis_bounds:
+        - 90
+        - 100
+      annotation_layers:
+        - name: "SLA Target"
+          annotationType: FORMULA
+          value: "99.0"
+          style: dashed
+          color: "#dc2626"
+
+  - slice_name: "Data Quality Check Failures"
+    viz_type: table
+    datasource: data_quality_results
+    params:
+      columns:
+        - table_name
+        - check_name
+        - check_type
+        - severity
+        - failure_count
+        - last_failure_timestamp
+      time_range: "Last 24 hours"
+      filters:
+        - col: status
+          op: "=="
+          val: "FAILED"
+      order_by:
+        - - severity
+          - true
+        - - failure_count
+          - false
+      row_limit: 50
+
+  # --- Alerting Summary ---
+  - slice_name: "Active Alerts"
+    viz_type: table
+    datasource: pipeline_alerts
+    params:
+      columns:
+        - alert_timestamp
+        - pipeline_name
+        - alert_type
+        - severity
+        - message
+        - acknowledged
+      time_range: "Last 48 hours"
+      filters:
+        - col: resolved
+          op: "=="
+          val: false
+      order_by:
+        - - severity
+          - true
+        - - alert_timestamp
+          - false
+      row_limit: 100
+      conditional_formatting:
+        - column: severity
+          operator: "=="
+          value: "CRITICAL"
+          color: "#fef2f2"
+        - column: severity
+          operator: "=="
+          value: "WARNING"
+          color: "#fffbeb"
+
+datasets:
+  - table_name: pipeline_runs
+    schema: atlas_lakehouse.operations
+    sql: |
+      SELECT
+        pipeline_name,
+        environment,
+        execution_timestamp,
+        status,
+        records_processed,
+        latency_seconds,
+        error_message,
+        run_id
+      FROM atlas_lakehouse.operations.pipeline_execution_log
+      WHERE execution_timestamp >= CURRENT_TIMESTAMP - INTERVAL '30' DAY
+
+  - table_name: cdc_metrics
+    schema: atlas_lakehouse.operations
+    sql: |
+      SELECT
+        source_table,
+        metric_timestamp,
+        lag_seconds,
+        records_per_second,
+        connector_status
+      FROM atlas_lakehouse.operations.cdc_connector_metrics
+      WHERE metric_timestamp >= CURRENT_TIMESTAMP - INTERVAL '24' HOUR
+
+  - table_name: dbt_run_results
+    schema: atlas_lakehouse.operations
+    sql: |
+      SELECT
+        model_name,
+        schema_name,
+        run_started_at,
+        status,
+        execution_time_seconds,
+        rows_affected,
+        run_id
+      FROM atlas_lakehouse.operations.dbt_run_results
+      WHERE run_started_at >= CURRENT_TIMESTAMP - INTERVAL '7' DAY
+
+  - table_name: data_quality_results
+    schema: atlas_lakehouse.operations
+    sql: |
+      SELECT
+        table_name,
+        domain,
+        check_name,
+        check_type,
+        severity,
+        status,
+        quality_score,
+        failure_count,
+        check_timestamp,
+        last_failure_timestamp
+      FROM atlas_lakehouse.operations.data_quality_check_results
+      WHERE check_timestamp >= CURRENT_TIMESTAMP - INTERVAL '30' DAY
+
+  - table_name: pipeline_alerts
+    schema: atlas_lakehouse.operations
+    sql: |
+      SELECT
+        alert_timestamp,
+        pipeline_name,
+        alert_type,
+        severity,
+        message,
+        acknowledged,
+        resolved,
+        resolved_by,
+        resolved_at
+      FROM atlas_lakehouse.operations.pipeline_alerts
+      WHERE alert_timestamp >= CURRENT_TIMESTAMP - INTERVAL '48' HOUR

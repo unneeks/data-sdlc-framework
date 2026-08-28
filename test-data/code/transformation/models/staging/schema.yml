@@ -1,0 +1,179 @@
+version: 2
+
+sources:
+  - name: raw_banking
+    description: >
+      Raw banking data ingested from Oracle DWH into Iceberg tables on S3.
+      Data lands via AWS DMS CDC replication with minimal transformation.
+    database: raw_banking
+    schema: public
+    loader: aws_dms
+    loaded_at_field: _ingested_at
+    freshness:
+      warn_after:
+        count: 6
+        period: hour
+      error_after:
+        count: 24
+        period: hour
+
+    tables:
+      - name: customer_accounts
+        description: >
+          Customer account master data from core banking system (Oracle Flexcube).
+          Contains account details, balances, KYC status, and regulatory flags.
+          Grain: one row per account_id.
+        columns:
+          - name: account_id
+            description: Primary key - unique account identifier from core banking
+            tests:
+              - unique
+              - not_null
+          - name: customer_id
+            description: Customer identifier (PII - hashed in staging)
+            tests:
+              - not_null
+          - name: account_type
+            description: "Account classification: savings, current, fixed_deposit, loan, credit_card"
+          - name: account_status
+            description: "Lifecycle status: active, dormant, closed, suspended, deleted"
+          - name: currency_code
+            description: ISO 4217 currency code for the account
+          - name: country_code
+            description: ISO 3166-1 alpha-2 country code for regulatory jurisdiction
+
+      - name: transactions
+        description: >
+          Financial transaction records from payment processing systems.
+          Includes debits, credits, transfers, fees, and FX conversions.
+          Grain: one row per transaction_id. ~50M rows/day in production.
+        columns:
+          - name: transaction_id
+            description: Primary key - unique transaction identifier
+            tests:
+              - unique
+              - not_null
+          - name: account_id
+            description: Foreign key to customer_accounts
+            tests:
+              - not_null
+              - relationships:
+                  to: source('raw_banking', 'customer_accounts')
+                  field: account_id
+          - name: transaction_datetime
+            description: Timestamp when transaction was initiated
+            tests:
+              - not_null
+          - name: transaction_amount
+            description: Absolute value of the transaction in transaction_currency
+            tests:
+              - not_null
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+                  max_value: 999999999.9999
+
+      - name: risk_scores
+        description: >
+          Credit and behavioural risk assessments from the risk engine.
+          Produced by batch scoring models (daily) and real-time triggers.
+          Grain: one row per risk_assessment_id. Multiple assessments per customer.
+        columns:
+          - name: risk_assessment_id
+            description: Primary key - unique risk assessment identifier
+            tests:
+              - unique
+              - not_null
+          - name: account_id
+            description: Foreign key to customer_accounts
+            tests:
+              - not_null
+          - name: customer_id
+            description: Customer identifier (PII - hashed in staging)
+            tests:
+              - not_null
+          - name: credit_score
+            description: Credit score (300-850 range, FICO-equivalent)
+            tests:
+              - dbt_expectations.expect_column_values_to_be_between:
+                  min_value: 0
+                  max_value: 1000
+          - name: assessment_date
+            description: Date the risk assessment was performed
+            tests:
+              - not_null
+
+models:
+  - name: stg_customer_accounts
+    description: >
+      Cleaned and standardized customer account records.
+      PII (customer_id) is SHA-256 hashed. Types are cast explicitly.
+      Filters out deleted accounts.
+    columns:
+      - name: account_sk
+        description: Surrogate key generated from account_id
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        description: Natural key from source system
+        tests:
+          - unique
+          - not_null
+      - name: customer_id_hashed
+        description: SHA-256 hash of customer_id with salt (PII protection)
+        tests:
+          - not_null
+      - name: account_type
+        tests:
+          - accepted_values:
+              values: ['savings', 'current', 'fixed_deposit', 'loan', 'credit_card', 'money_market', 'investment']
+      - name: account_status
+        tests:
+          - accepted_values:
+              values: ['active', 'dormant', 'closed', 'suspended', 'frozen']
+
+  - name: stg_transactions
+    description: >
+      Cleaned and standardized transaction records with signed amounts.
+      Counterparty IDs are hashed. Voided transactions are excluded.
+    columns:
+      - name: transaction_sk
+        description: Surrogate key generated from transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: transaction_id
+        description: Natural key from source system
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        tests:
+          - not_null
+      - name: transaction_date
+        tests:
+          - not_null
+
+  - name: stg_risk_scores
+    description: >
+      Standardized risk assessment records with normalized scores.
+      Includes Basel III/IV regulatory risk weights.
+    columns:
+      - name: risk_assessment_sk
+        description: Surrogate key generated from risk_assessment_id
+        tests:
+          - unique
+          - not_null
+      - name: risk_assessment_id
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        tests:
+          - not_null
+      - name: credit_score
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1000
+              row_condition: "credit_score is not null"

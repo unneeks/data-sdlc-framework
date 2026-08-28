@@ -1,0 +1,507 @@
+{
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "name": "transactions",
+  "displayName": "Transactions",
+  "fullyQualifiedName": "atlas_lakehouse.curated.transactions",
+  "description": "Core financial transactions table recording all payment movements across retail and commercial banking. High-volume streaming ingestion via Kafka/MSK. Subject to PSD2 reporting, FCA transaction reporting (FCA PS 17/5), and 7-year retention per Companies Act 2006 s.388. Partitioned by transaction_date for query performance.",
+  "version": 1.4,
+  "tableType": "Iceberg",
+  "serviceType": "Glue",
+  "service": {
+    "id": "svc-glue-prod-001",
+    "type": "databaseService",
+    "name": "atlas_glue_catalog",
+    "fullyQualifiedName": "atlas_glue_catalog"
+  },
+  "database": {
+    "id": "db-prod-001",
+    "type": "database",
+    "name": "atlas_lakehouse",
+    "fullyQualifiedName": "atlas_lakehouse"
+  },
+  "databaseSchema": {
+    "id": "schema-curated-001",
+    "type": "databaseSchema",
+    "name": "curated",
+    "fullyQualifiedName": "atlas_lakehouse.curated"
+  },
+  "columns": [
+    {
+      "name": "transaction_id",
+      "displayName": "Transaction ID",
+      "dataType": "STRING",
+      "dataLength": 36,
+      "description": "Globally unique transaction identifier (UUID v4). Generated at point of origination.",
+      "constraint": "PRIMARY_KEY",
+      "ordinalPosition": 1,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "account_id",
+      "displayName": "Account ID",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Account from/to which the transaction is associated. Foreign key to customer_accounts.account_id.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 2,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "counterparty_account_id",
+      "displayName": "Counterparty Account ID",
+      "dataType": "STRING",
+      "dataLength": 34,
+      "description": "Counterparty account identifier. IBAN format for international transfers, sort code + account number for domestic.",
+      "ordinalPosition": 3,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ],
+      "glossaryTerms": [
+        {
+          "tagFQN": "BankingGlossary.CounterpartyExposure",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ]
+    },
+    {
+      "name": "counterparty_name",
+      "displayName": "Counterparty Name",
+      "dataType": "STRING",
+      "dataLength": 200,
+      "description": "Name of the counterparty as provided in the payment instruction. May contain PII for P2P transfers.",
+      "ordinalPosition": 4,
+      "tags": [
+        {
+          "tagFQN": "PII.Sensitive",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "GDPR.SubjectToErasure",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "transaction_date",
+      "displayName": "Transaction Date",
+      "dataType": "DATE",
+      "description": "Value date of the transaction. Partition key. Used for regulatory reporting windows.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 5,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "transaction_timestamp",
+      "displayName": "Transaction Timestamp",
+      "dataType": "TIMESTAMP",
+      "description": "Precise timestamp of transaction execution in UTC. Microsecond precision for ordering guarantees.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 6,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "amount",
+      "displayName": "Amount",
+      "dataType": "DECIMAL",
+      "dataLength": 18,
+      "description": "Transaction amount in the transaction currency. Precision: 18,4. Positive for credits, negative for debits.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 7,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "currency",
+      "displayName": "Currency",
+      "dataType": "STRING",
+      "dataLength": 3,
+      "description": "ISO 4217 currency code. Primary: GBP, EUR, USD. All other currencies supported.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 8,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "amount_gbp",
+      "displayName": "Amount (GBP)",
+      "dataType": "DECIMAL",
+      "dataLength": 18,
+      "description": "Transaction amount converted to GBP at the daily ECB reference rate. Used for threshold-based AML monitoring.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 9,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "transaction_type",
+      "displayName": "Transaction Type",
+      "dataType": "STRING",
+      "dataLength": 30,
+      "description": "Classification: DIRECT_DEBIT, STANDING_ORDER, FASTER_PAYMENT, BACS, CHAPS, CARD_PAYMENT, ATM_WITHDRAWAL, INTERNATIONAL_TRANSFER, INTERNAL_TRANSFER.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 10,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "transaction_channel",
+      "displayName": "Transaction Channel",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Origination channel: MOBILE_APP, ONLINE_BANKING, BRANCH, ATM, TELEPHONE, API_OPEN_BANKING.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 11,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "transaction_status",
+      "displayName": "Transaction Status",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Processing status: PENDING, COMPLETED, FAILED, REVERSED, HELD_FOR_REVIEW.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 12,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "merchant_category_code",
+      "displayName": "Merchant Category Code",
+      "dataType": "STRING",
+      "dataLength": 4,
+      "description": "ISO 18245 Merchant Category Code for card transactions. NULL for non-card transactions.",
+      "ordinalPosition": 13,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "payment_reference",
+      "displayName": "Payment Reference",
+      "dataType": "STRING",
+      "dataLength": 140,
+      "description": "Free-text payment reference provided by the originator. May contain PII - subject to redaction rules.",
+      "ordinalPosition": 14,
+      "tags": [
+        {
+          "tagFQN": "PII.Potential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "fraud_score",
+      "displayName": "Fraud Score",
+      "dataType": "DECIMAL",
+      "dataLength": 5,
+      "description": "Real-time fraud detection score (0.0-1.0). Threshold >= 0.85 triggers HELD_FOR_REVIEW status. Model: atlas-fraud-v3.",
+      "ordinalPosition": 15,
+      "tags": [
+        {
+          "tagFQN": "Classification.Restricted",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "aml_flag",
+      "displayName": "AML Flag",
+      "dataType": "BOOLEAN",
+      "description": "Anti-Money Laundering alert flag. TRUE indicates transaction matched AML rules and requires investigation.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 16,
+      "tags": [
+        {
+          "tagFQN": "Classification.Restricted",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ],
+      "glossaryTerms": [
+        {
+          "tagFQN": "BankingGlossary.AML",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ]
+    },
+    {
+      "name": "sar_reference",
+      "displayName": "SAR Reference",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Suspicious Activity Report reference if filed with NCA. NULL if no SAR raised. Access strictly limited to MLRO team.",
+      "ordinalPosition": 17,
+      "tags": [
+        {
+          "tagFQN": "Classification.Restricted",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ],
+      "glossaryTerms": [
+        {
+          "tagFQN": "BankingGlossary.SAR",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ]
+    },
+    {
+      "name": "batch_id",
+      "displayName": "Batch ID",
+      "dataType": "STRING",
+      "dataLength": 36,
+      "description": "Ingestion batch identifier for data lineage tracking. Links to pipeline execution metadata.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 18,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "created_at",
+      "displayName": "Created At",
+      "dataType": "TIMESTAMP",
+      "description": "Record ingestion timestamp in UTC.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 19,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "updated_at",
+      "displayName": "Updated At",
+      "dataType": "TIMESTAMP",
+      "description": "Last modification timestamp. Updated on status changes (e.g., PENDING -> COMPLETED).",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 20,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    }
+  ],
+  "tableConstraints": [
+    {
+      "constraintType": "PRIMARY_KEY",
+      "columns": ["transaction_id"]
+    },
+    {
+      "constraintType": "FOREIGN_KEY",
+      "columns": ["account_id"],
+      "referredColumns": ["atlas_lakehouse.curated.customer_accounts.account_id"]
+    }
+  ],
+  "tablePartition": {
+    "columns": ["transaction_date"],
+    "intervalType": "TIME-UNIT",
+    "interval": "DAY"
+  },
+  "tableProfilerConfig": {
+    "profileSample": 5.0,
+    "profileSampleType": "PERCENTAGE",
+    "sampleDataCount": 50
+  },
+  "owner": {
+    "id": "owner-payments-data-001",
+    "type": "team",
+    "name": "Payments Data Engineering",
+    "displayName": "Payments Data Engineering",
+    "description": "Responsible for transaction data pipelines, payment processing analytics, and fraud detection data feeds."
+  },
+  "domain": {
+    "id": "domain-payments-001",
+    "type": "domain",
+    "name": "Payments",
+    "fullyQualifiedName": "Payments",
+    "description": "Payments domain covering all transaction processing, payment rails, and settlement data."
+  },
+  "tags": [
+    {
+      "tagFQN": "Tier.Tier1",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    },
+    {
+      "tagFQN": "DataQuality.Critical",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    },
+    {
+      "tagFQN": "Regulatory.FCA",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    },
+    {
+      "tagFQN": "Regulatory.PSD2",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    },
+    {
+      "tagFQN": "Regulatory.PRA",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    }
+  ],
+  "retentionPeriod": "P7Y",
+  "dataProducts": [
+    {
+      "id": "dp-transaction-analytics",
+      "type": "dataProduct",
+      "name": "Transaction Analytics",
+      "fullyQualifiedName": "TransactionAnalytics"
+    },
+    {
+      "id": "dp-fraud-detection",
+      "type": "dataProduct",
+      "name": "Fraud Detection",
+      "fullyQualifiedName": "FraudDetection"
+    }
+  ],
+  "sourceUrl": "s3://atlas-lakehouse-prod-eu-west-2/curated/transactions/",
+  "lifeCycle": {
+    "created": {
+      "timestamp": 1704067200000,
+      "accessedByAProcess": {
+        "name": "oracle_payments_migration_v1",
+        "description": "Initial migration from Oracle Payments module to Iceberg"
+      }
+    }
+  },
+  "sourceHash": "oracle_dwh.dbo.tbl_transactions",
+  "extension": {
+    "dataRetention": {
+      "retentionPeriod": "7 years from transaction date",
+      "legalBasis": "Companies Act 2006 s.388; FCA SYSC 9.1.1R; HMRC requirements for financial records",
+      "reviewDate": "2025-03-01",
+      "dataController": "ATLAS Bank plc",
+      "dpiaNecessary": true,
+      "dpiaReference": "DPIA-2024-TXN-002"
+    },
+    "lineage": {
+      "sourceSystem": "Oracle DWH (Payments Module) + Real-time card processor feed",
+      "ingestionMethod": "Streaming: MSK (Kafka) via Spark Structured Streaming; Batch: Debezium CDC for historical",
+      "transformationLayer": "dbt (stg_transactions -> int_transactions_enriched -> transactions)",
+      "refreshFrequency": "Streaming: sub-minute latency; Batch reconciliation: daily at 02:00 UTC"
+    },
+    "volumeMetrics": {
+      "dailyRecordCount": "12-15 million transactions/day",
+      "averageRecordSizeBytes": 1024,
+      "totalRecordCount": "4.2 billion (historical migration + ongoing)",
+      "growthRateMonthly": "3-5%"
+    }
+  }
+}

@@ -1,0 +1,311 @@
+# Project ATLAS — Continuous Deployment to Staging
+# Triggered on merge to release/* branches
+# Deploys infrastructure, syncs DAGs, runs dbt, validates with integration tests
+
+name: CD — Staging
+
+on:
+  push:
+    branches:
+      - 'release/**'
+      - 'release/*'
+
+env:
+  AWS_REGION: us-east-1
+  TF_WORKSPACE: staging
+  MWAA_ENV_NAME: atlas-mwaa-staging
+  MWAA_DAGS_BUCKET: atlas-mwaa-dags-staging
+  DBT_TARGET: staging
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_STAGING }}
+
+permissions:
+  contents: read
+  id-token: write
+  deployments: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Terraform: Plan and apply infrastructure changes to staging
+  # ─────────────────────────────────────────────────────────────────────────────
+  terraform:
+    name: Terraform (Staging)
+    runs-on: ubuntu-latest
+    environment: staging
+    outputs:
+      glue_catalog_db: ${{ steps.outputs.outputs.glue_catalog_db }}
+      emr_cluster_id: ${{ steps.outputs.outputs.emr_cluster_id }}
+      redshift_endpoint: ${{ steps.outputs.outputs.redshift_endpoint }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: atlas-cd-staging-${{ github.run_number }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: infrastructure/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=atlas-tfstate-staging" \
+            -backend-config="key=atlas/staging/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=atlas-tflock-staging"
+
+      - name: Terraform Plan
+        working-directory: infrastructure/terraform
+        run: |
+          terraform plan \
+            -var-file="environments/staging.tfvars" \
+            -var="git_sha=${{ github.sha }}" \
+            -var="deploy_version=${{ github.run_number }}" \
+            -out=staging.tfplan \
+            -detailed-exitcode
+        continue-on-error: true
+        id: plan
+
+      - name: Terraform Apply
+        if: steps.plan.outcome == 'success'
+        working-directory: infrastructure/terraform
+        run: |
+          terraform apply -auto-approve staging.tfplan
+
+      - name: Export Terraform outputs
+        id: outputs
+        working-directory: infrastructure/terraform
+        run: |
+          echo "glue_catalog_db=$(terraform output -raw glue_catalog_database)" >> "$GITHUB_OUTPUT"
+          echo "emr_cluster_id=$(terraform output -raw emr_cluster_id)" >> "$GITHUB_OUTPUT"
+          echo "redshift_endpoint=$(terraform output -raw redshift_serverless_endpoint)" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Sync DAGs: Upload Airflow DAGs to MWAA S3 bucket
+  # ─────────────────────────────────────────────────────────────────────────────
+  sync-dags:
+    name: Sync DAGs to MWAA
+    runs-on: ubuntu-latest
+    needs: [terraform]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate DAG syntax
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Airflow for DAG validation
+        run: |
+          pip install apache-airflow==2.9.0 \
+            apache-airflow-providers-amazon==8.20.0 \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.0/constraints-3.11.txt"
+
+      - name: Validate DAGs
+        run: |
+          export AIRFLOW_HOME=$(mktemp -d)
+          airflow db init 2>/dev/null
+          python -c "
+          from airflow.models import DagBag
+          bag = DagBag(dag_folder='code/orchestration/dags/', include_examples=False)
+          if bag.import_errors:
+              for path, error in bag.import_errors.items():
+                  print(f'ERROR in {path}: {error}')
+              exit(1)
+          print(f'Validated {len(bag.dags)} DAGs successfully')
+          "
+
+      - name: Sync DAGs to S3
+        run: |
+          aws s3 sync code/orchestration/dags/ \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/dags/ \
+            --delete \
+            --exclude "__pycache__/*" \
+            --exclude "*.pyc" \
+            --exclude ".pytest_cache/*"
+
+      - name: Sync plugins and requirements
+        run: |
+          aws s3 cp code/orchestration/requirements.txt \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/requirements.txt
+          if [ -d code/orchestration/plugins ]; then
+            aws s3 sync code/orchestration/plugins/ \
+              s3://${{ env.MWAA_DAGS_BUCKET }}/plugins/ --delete
+          fi
+
+      - name: Wait for MWAA environment update
+        run: |
+          echo "Waiting for MWAA to pick up new DAGs..."
+          sleep 30
+          aws mwaa get-environment --name ${{ env.MWAA_ENV_NAME }} \
+            --query 'Environment.Status' --output text
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # dbt: Run transformations in staging
+  # ─────────────────────────────────────────────────────────────────────────────
+  dbt-run:
+    name: dbt Run (Staging)
+    runs-on: ubuntu-latest
+    needs: [terraform, sync-dags]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dbt dependencies
+        run: |
+          pip install dbt-core==1.8.0 dbt-glue==1.8.0
+
+      - name: Run dbt
+        working-directory: code/transformation
+        env:
+          GLUE_CATALOG_DB: ${{ needs.terraform.outputs.glue_catalog_db }}
+        run: |
+          dbt deps
+          dbt seed --target ${{ env.DBT_TARGET }} --full-refresh
+          dbt run --target ${{ env.DBT_TARGET }} --full-refresh
+          dbt test --target ${{ env.DBT_TARGET }} --store-failures
+
+      - name: Upload dbt artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-staging-artifacts
+          path: |
+            code/transformation/target/run_results.json
+            code/transformation/target/manifest.json
+          retention-days: 14
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Integration Tests: End-to-end pipeline validation
+  # ─────────────────────────────────────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [dbt-run]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install test dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip install boto3 awswrangler pytest-timeout great-expectations soda-core-spark
+
+      - name: Run integration tests
+        env:
+          ATLAS_ENV: staging
+          GLUE_CATALOG_DB: ${{ needs.terraform.outputs.glue_catalog_db }}
+          REDSHIFT_ENDPOINT: ${{ needs.terraform.outputs.redshift_endpoint }}
+        run: |
+          chmod +x ci-cd/scripts/run_integration_tests.sh
+          ci-cd/scripts/run_integration_tests.sh
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: reports/integration/
+          retention-days: 14
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Notify: Send deployment status to Slack
+  # ─────────────────────────────────────────────────────────────────────────────
+  notify:
+    name: Notify Slack
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [terraform, sync-dags, dbt-run, integration-tests]
+    steps:
+      - name: Determine deployment status
+        id: status
+        run: |
+          if [[ "${{ needs.integration-tests.result }}" == "success" ]]; then
+            echo "color=#36a64f" >> "$GITHUB_OUTPUT"
+            echo "status=SUCCESS" >> "$GITHUB_OUTPUT"
+            echo "emoji=:white_check_mark:" >> "$GITHUB_OUTPUT"
+          else
+            echo "color=#dc3545" >> "$GITHUB_OUTPUT"
+            echo "status=FAILED" >> "$GITHUB_OUTPUT"
+            echo "emoji=:x:" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "${{ steps.status.outputs.color }}",
+                  "blocks": [
+                    {
+                      "type": "header",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "${{ steps.status.outputs.emoji }} ATLAS Staging Deploy: ${{ steps.status.outputs.status }}"
+                      }
+                    },
+                    {
+                      "type": "section",
+                      "fields": [
+                        {"type": "mrkdwn", "text": "*Branch:*\n${{ github.ref_name }}"},
+                        {"type": "mrkdwn", "text": "*Commit:*\n<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"},
+                        {"type": "mrkdwn", "text": "*Triggered by:*\n${{ github.actor }}"},
+                        {"type": "mrkdwn", "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|#${{ github.run_number }}>"}
+                      ]
+                    },
+                    {
+                      "type": "section",
+                      "fields": [
+                        {"type": "mrkdwn", "text": "*Terraform:* ${{ needs.terraform.result }}"},
+                        {"type": "mrkdwn", "text": "*DAG Sync:* ${{ needs.sync-dags.result }}"},
+                        {"type": "mrkdwn", "text": "*dbt Run:* ${{ needs.dbt-run.result }}"},
+                        {"type": "mrkdwn", "text": "*Integration Tests:* ${{ needs.integration-tests.result }}"}
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

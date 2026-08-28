@@ -1,0 +1,516 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "customer_accounts",
+  "displayName": "Customer Accounts",
+  "fullyQualifiedName": "atlas_lakehouse.curated.customer_accounts",
+  "description": "Master customer accounts table containing all retail and commercial banking accounts. Source: Oracle DWH CIF (Customer Information File) migrated to AWS Lakehouse. Contains PII subject to GDPR Article 17 right-to-erasure requirements and FCA SYSC 3.2 record-keeping obligations.",
+  "version": 1.2,
+  "tableType": "Iceberg",
+  "serviceType": "Glue",
+  "service": {
+    "id": "svc-glue-prod-001",
+    "type": "databaseService",
+    "name": "atlas_glue_catalog",
+    "fullyQualifiedName": "atlas_glue_catalog"
+  },
+  "database": {
+    "id": "db-prod-001",
+    "type": "database",
+    "name": "atlas_lakehouse",
+    "fullyQualifiedName": "atlas_lakehouse"
+  },
+  "databaseSchema": {
+    "id": "schema-curated-001",
+    "type": "databaseSchema",
+    "name": "curated",
+    "fullyQualifiedName": "atlas_lakehouse.curated"
+  },
+  "columns": [
+    {
+      "name": "account_id",
+      "displayName": "Account ID",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Unique account identifier (sort code + account number). Format: 6-digit sort code hyphen 8-digit account number.",
+      "constraint": "PRIMARY_KEY",
+      "ordinalPosition": 1,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ],
+      "glossaryTerms": [
+        {
+          "tagFQN": "BankingGlossary.AccountIdentifier",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ]
+    },
+    {
+      "name": "customer_id",
+      "displayName": "Customer ID",
+      "dataType": "STRING",
+      "dataLength": 12,
+      "description": "Unique customer identifier from the CIF system. Links to customer_master and KYC records.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 2,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "full_name",
+      "displayName": "Full Name",
+      "dataType": "STRING",
+      "dataLength": 200,
+      "description": "Customer full legal name as per KYC documentation. Subject to GDPR right-to-erasure.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 3,
+      "tags": [
+        {
+          "tagFQN": "PII.Sensitive",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "GDPR.SubjectToErasure",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "date_of_birth",
+      "displayName": "Date of Birth",
+      "dataType": "DATE",
+      "description": "Customer date of birth. Used for age verification and AML screening. PII - restricted access.",
+      "ordinalPosition": 4,
+      "tags": [
+        {
+          "tagFQN": "PII.Sensitive",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "GDPR.SubjectToErasure",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "national_insurance_number",
+      "displayName": "National Insurance Number",
+      "dataType": "STRING",
+      "dataLength": 9,
+      "description": "UK National Insurance Number. Highly sensitive PII. Access restricted to KYC and Compliance teams only.",
+      "ordinalPosition": 5,
+      "tags": [
+        {
+          "tagFQN": "PII.HighlySensitive",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "GDPR.SubjectToErasure",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "Classification.Restricted",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "email_address",
+      "displayName": "Email Address",
+      "dataType": "STRING",
+      "dataLength": 254,
+      "description": "Primary contact email address. Used for digital correspondence and MFA recovery.",
+      "ordinalPosition": 6,
+      "tags": [
+        {
+          "tagFQN": "PII.Sensitive",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "GDPR.SubjectToErasure",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "phone_number",
+      "displayName": "Phone Number",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Primary contact telephone number in E.164 format.",
+      "ordinalPosition": 7,
+      "tags": [
+        {
+          "tagFQN": "PII.Sensitive",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "GDPR.SubjectToErasure",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "postal_address",
+      "displayName": "Postal Address",
+      "dataType": "STRING",
+      "dataLength": 500,
+      "description": "Registered postal address. JSON structure containing address lines, postcode, and country code.",
+      "ordinalPosition": 8,
+      "tags": [
+        {
+          "tagFQN": "PII.Sensitive",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        },
+        {
+          "tagFQN": "GDPR.SubjectToErasure",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "account_type",
+      "displayName": "Account Type",
+      "dataType": "STRING",
+      "dataLength": 30,
+      "description": "Account product type: CURRENT, SAVINGS, ISA, MORTGAGE, LOAN, CREDIT_CARD, BUSINESS_CURRENT, BUSINESS_SAVINGS.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 9,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "account_status",
+      "displayName": "Account Status",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Current account status: ACTIVE, DORMANT, SUSPENDED, CLOSED, FROZEN.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 10,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "sort_code",
+      "displayName": "Sort Code",
+      "dataType": "STRING",
+      "dataLength": 6,
+      "description": "Bank sort code identifying the branch. Format: 6 digits.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 11,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "account_open_date",
+      "displayName": "Account Open Date",
+      "dataType": "DATE",
+      "description": "Date the account was opened. Used for tenure calculations and regulatory reporting.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 12,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "account_close_date",
+      "displayName": "Account Close Date",
+      "dataType": "DATE",
+      "description": "Date the account was closed. NULL for active accounts. Triggers retention countdown per FCA SYSC 9.",
+      "ordinalPosition": 13,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "current_balance",
+      "displayName": "Current Balance",
+      "dataType": "DECIMAL",
+      "dataLength": 18,
+      "description": "Current account balance in GBP. Precision: 18,2. Updated via CDC from core banking system.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 14,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "kyc_status",
+      "displayName": "KYC Status",
+      "dataType": "STRING",
+      "dataLength": 20,
+      "description": "Know Your Customer verification status: VERIFIED, PENDING, EXPIRED, FAILED. Per ML Regulations 2017.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 15,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ],
+      "glossaryTerms": [
+        {
+          "tagFQN": "BankingGlossary.KYC",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ]
+    },
+    {
+      "name": "risk_rating",
+      "displayName": "Risk Rating",
+      "dataType": "STRING",
+      "dataLength": 10,
+      "description": "Customer risk rating for AML purposes: LOW, MEDIUM, HIGH, VERY_HIGH. Determined by CDD/EDD process.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 16,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ],
+      "glossaryTerms": [
+        {
+          "tagFQN": "BankingGlossary.AML",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ]
+    },
+    {
+      "name": "pep_flag",
+      "displayName": "PEP Flag",
+      "dataType": "BOOLEAN",
+      "description": "Politically Exposed Person indicator. TRUE triggers enhanced due diligence requirements.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 17,
+      "tags": [
+        {
+          "tagFQN": "Classification.Restricted",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ],
+      "glossaryTerms": [
+        {
+          "tagFQN": "BankingGlossary.PEP",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ]
+    },
+    {
+      "name": "sanctions_screening_date",
+      "displayName": "Sanctions Screening Date",
+      "dataType": "TIMESTAMP",
+      "description": "Last date sanctions screening was performed against OFSI/OFAC/EU consolidated lists.",
+      "ordinalPosition": 18,
+      "tags": [
+        {
+          "tagFQN": "Classification.Confidential",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "created_at",
+      "displayName": "Created At",
+      "dataType": "TIMESTAMP",
+      "description": "Record creation timestamp in UTC. Set during initial CDC load from Oracle.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 19,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    },
+    {
+      "name": "updated_at",
+      "displayName": "Updated At",
+      "dataType": "TIMESTAMP",
+      "description": "Last modification timestamp in UTC. Updated via Debezium CDC from source system.",
+      "constraint": "NOT_NULL",
+      "ordinalPosition": 20,
+      "tags": [
+        {
+          "tagFQN": "Classification.Internal",
+          "labelType": "Manual",
+          "state": "Confirmed",
+          "source": "Classification"
+        }
+      ]
+    }
+  ],
+  "tableConstraints": [
+    {
+      "constraintType": "PRIMARY_KEY",
+      "columns": ["account_id"]
+    },
+    {
+      "constraintType": "UNIQUE",
+      "columns": ["customer_id", "account_type", "sort_code"]
+    }
+  ],
+  "tablePartition": {
+    "columns": ["account_type"],
+    "intervalType": "COLUMN_VALUE"
+  },
+  "owner": {
+    "id": "owner-retail-data-001",
+    "type": "team",
+    "name": "Retail Banking Data Engineering",
+    "displayName": "Retail Banking Data Engineering",
+    "description": "Responsible for customer data domains including accounts, KYC, and onboarding."
+  },
+  "domain": {
+    "id": "domain-customer-001",
+    "type": "domain",
+    "name": "Customer",
+    "fullyQualifiedName": "Customer",
+    "description": "Customer domain encompassing all customer identity, accounts, and relationship data."
+  },
+  "tags": [
+    {
+      "tagFQN": "Tier.Tier1",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    },
+    {
+      "tagFQN": "DataQuality.Critical",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    },
+    {
+      "tagFQN": "Regulatory.FCA",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    },
+    {
+      "tagFQN": "Regulatory.GDPR",
+      "labelType": "Manual",
+      "state": "Confirmed",
+      "source": "Classification"
+    }
+  ],
+  "retentionPeriod": "P7Y",
+  "dataProducts": [
+    {
+      "id": "dp-customer-360",
+      "type": "dataProduct",
+      "name": "Customer 360",
+      "fullyQualifiedName": "Customer360"
+    }
+  ],
+  "sourceUrl": "s3://atlas-lakehouse-prod-eu-west-2/curated/customer_accounts/",
+  "lifeCycle": {
+    "created": {
+      "timestamp": 1704067200000,
+      "accessedByAProcess": {
+        "name": "oracle_cif_migration_v1",
+        "description": "Initial migration from Oracle CIF to Iceberg"
+      }
+    }
+  },
+  "sourceHash": "oracle_dwh.dbo.tbl_customer_accounts",
+  "extension": {
+    "dataRetention": {
+      "retentionPeriod": "7 years post account closure",
+      "legalBasis": "FCA SYSC 9.1.1R - Record keeping for MiFID business; GDPR Art 17(3)(b) - legal obligation",
+      "reviewDate": "2025-01-15",
+      "dataController": "ATLAS Bank plc",
+      "dpiaNecessary": true,
+      "dpiaReference": "DPIA-2024-CIF-001"
+    },
+    "lineage": {
+      "sourceSystem": "Oracle DWH (CIF Module)",
+      "ingestionMethod": "Debezium CDC via MSK Connect",
+      "transformationLayer": "dbt (curated model: stg_customer_accounts -> int_customer_accounts -> customer_accounts)",
+      "refreshFrequency": "Near real-time (CDC latency < 30s)"
+    }
+  }
+}

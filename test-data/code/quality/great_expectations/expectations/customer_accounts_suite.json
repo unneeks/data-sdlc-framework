@@ -1,0 +1,349 @@
+{
+  "expectation_suite_name": "customer_accounts_suite",
+  "ge_cloud_id": null,
+  "data_asset_type": null,
+  "meta": {
+    "project": "ATLAS",
+    "domain": "banking",
+    "owner": "data-engineering@atlas-bank.com",
+    "description": "Data quality expectations for the customer accounts dimension table. Validates schema integrity, data completeness, value ranges, and regulatory compliance requirements.",
+    "regulatory_frameworks": ["BCBS 239", "GDPR", "SOX"],
+    "last_reviewed": "2026-08-15",
+    "review_cadence": "quarterly"
+  },
+  "expectations": [
+    {
+      "expectation_type": "expect_table_columns_to_match_ordered_list",
+      "kwargs": {
+        "column_list": [
+          "customer_key",
+          "customer_id",
+          "account_number",
+          "account_type",
+          "customer_name",
+          "date_of_birth",
+          "email_address",
+          "phone_number",
+          "address_line_1",
+          "address_line_2",
+          "city",
+          "state_province",
+          "postal_code",
+          "country_code",
+          "kyc_status",
+          "kyc_verified_date",
+          "risk_rating",
+          "account_status",
+          "account_open_date",
+          "account_close_date",
+          "branch_code",
+          "relationship_manager_id",
+          "credit_score",
+          "annual_income",
+          "employment_status",
+          "source_system",
+          "source_record_id",
+          "ingestion_timestamp",
+          "effective_from",
+          "effective_to",
+          "is_current",
+          "record_hash"
+        ]
+      },
+      "meta": {
+        "notes": "Schema must match the agreed-upon data contract. Any column changes require a CR."
+      }
+    },
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 50000,
+        "max_value": 50000000
+      },
+      "meta": {
+        "notes": "Customer base should be between 50K and 50M. Values outside this range indicate data loss or duplication."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "customer_key"
+      },
+      "meta": {
+        "notes": "Surrogate key must be unique — SCD Type 2 generates one row per version."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "customer_id"
+      },
+      "meta": {
+        "notes": "Business key from source system — must never be null."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "account_number"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "account_number",
+        "regex": "^[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}$|^[0-9]{8,17}$"
+      },
+      "meta": {
+        "notes": "Accepts IBAN format or domestic account numbers (8-17 digits)."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "account_type",
+        "value_set": [
+          "CHECKING",
+          "SAVINGS",
+          "MONEY_MARKET",
+          "CERTIFICATE_OF_DEPOSIT",
+          "LOAN",
+          "MORTGAGE",
+          "CREDIT_LINE",
+          "INVESTMENT",
+          "RETIREMENT",
+          "TRUST"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "customer_name",
+        "mostly": 0.999
+      },
+      "meta": {
+        "notes": "Customer name is required for KYC. Tolerance of 0.1% for data migration edge cases."
+      }
+    },
+    {
+      "expectation_type": "expect_column_value_lengths_to_be_between",
+      "kwargs": {
+        "column": "customer_name",
+        "min_value": 2,
+        "max_value": 200
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_dateutil_parseable",
+      "kwargs": {
+        "column": "date_of_birth",
+        "mostly": 0.98
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "date_of_birth",
+        "min_value": "1900-01-01",
+        "max_value": "2008-12-31",
+        "parse_strings_as_datetimes": true
+      },
+      "meta": {
+        "notes": "Minimum age 18 for account holders. No DOB before 1900."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "email_address",
+        "regex": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "Email format validation. 5% tolerance for legacy records without email."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "kyc_status",
+        "value_set": [
+          "VERIFIED",
+          "PENDING",
+          "EXPIRED",
+          "REJECTED",
+          "UNDER_REVIEW",
+          "ENHANCED_DUE_DILIGENCE"
+        ]
+      },
+      "meta": {
+        "notes": "KYC status must be a valid state per AML/CFT compliance requirements."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "kyc_status"
+      },
+      "meta": {
+        "notes": "Regulatory requirement: all accounts must have a KYC status."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "risk_rating",
+        "value_set": ["LOW", "MEDIUM", "HIGH", "VERY_HIGH", "PROHIBITED"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "account_status",
+        "value_set": ["ACTIVE", "DORMANT", "FROZEN", "CLOSED", "SUSPENDED", "PENDING_CLOSURE"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "account_open_date"
+      }
+    },
+    {
+      "expectation_type": "expect_column_pair_values_A_to_be_greater_than_B",
+      "kwargs": {
+        "column_A": "account_close_date",
+        "column_B": "account_open_date",
+        "or_equal": true,
+        "ignore_row_if": "either_value_is_missing"
+      },
+      "meta": {
+        "notes": "Close date must be after open date when present."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "country_code",
+        "regex": "^[A-Z]{2}$",
+        "mostly": 0.999
+      },
+      "meta": {
+        "notes": "ISO 3166-1 alpha-2 country code."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "credit_score",
+        "min_value": 300,
+        "max_value": 850,
+        "mostly": 0.95
+      },
+      "meta": {
+        "notes": "FICO score range. 5% tolerance for international customers without US credit scores."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "annual_income",
+        "min_value": 0,
+        "max_value": 999999999.99,
+        "mostly": 0.98
+      },
+      "meta": {
+        "notes": "Income must be non-negative. Very high values flagged for review."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "employment_status",
+        "value_set": ["EMPLOYED", "SELF_EMPLOYED", "UNEMPLOYED", "RETIRED", "STUDENT", "OTHER"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "source_system",
+        "value_set": ["ORACLE_DWH", "CORE_BANKING", "CRM", "ONBOARDING", "MIGRATION_SEED"]
+      },
+      "meta": {
+        "notes": "Track data lineage back to source system."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "ingestion_timestamp"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "effective_from"
+      },
+      "meta": {
+        "notes": "SCD Type 2 effective_from is always set."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "is_current",
+        "value_set": [true, false, 1, 0]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "record_hash"
+      },
+      "meta": {
+        "notes": "Hash used for change detection in incremental loads."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "record_hash"
+      },
+      "meta": {
+        "notes": "Each unique combination of attributes should produce a unique hash."
+      }
+    },
+    {
+      "expectation_type": "expect_compound_columns_to_be_unique",
+      "kwargs": {
+        "column_list": ["customer_id", "effective_from"]
+      },
+      "meta": {
+        "notes": "SCD Type 2 uniqueness constraint: one version per customer per effective date."
+      }
+    },
+    {
+      "expectation_type": "expect_column_proportion_of_unique_values_to_be_between",
+      "kwargs": {
+        "column": "customer_id",
+        "min_value": 0.7,
+        "max_value": 1.0
+      },
+      "meta": {
+        "notes": "High uniqueness expected. Low values indicate excessive SCD versioning or duplication."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_match_regex",
+      "kwargs": {
+        "column": "customer_name",
+        "regex": "^(TEST|DUMMY|FAKE|XXX|NULL|N/A|UNKNOWN)\\s",
+        "mostly": 0.999
+      },
+      "meta": {
+        "notes": "Detect test/dummy records that should not be in production data."
+      }
+    }
+  ]
+}

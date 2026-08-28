@@ -1,0 +1,215 @@
+version: 2
+
+models:
+  - name: mart_customer_360
+    description: >
+      Complete 360-degree customer view combining account details, risk profile,
+      transaction behaviour, and derived segmentation. Primary consumption layer
+      for BI dashboards, CRM integration, and regulatory reporting.
+      Grain: one row per account_id. Incrementally merged on account changes.
+    meta:
+      owner: data-platform-team
+      tier: gold
+      pii_columns: ["customer_id_hashed"]
+      sla: "refreshed by 06:00 UTC daily"
+      consumers: ["tableau", "salesforce", "regulatory_reporting"]
+    columns:
+      - name: account_sk
+        description: Surrogate key (hash of account_id)
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        description: Natural key from core banking system
+        tests:
+          - unique
+          - not_null
+      - name: customer_id_hashed
+        description: SHA-256 hashed customer identifier (PII protected)
+        tests:
+          - not_null
+      - name: account_type
+        description: Account product classification
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['savings', 'current', 'fixed_deposit', 'loan', 'credit_card', 'money_market', 'investment']
+      - name: account_status
+        description: Current account lifecycle status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'dormant', 'closed', 'suspended', 'frozen']
+      - name: composite_risk_tier
+        description: "Derived risk classification: default, watchlist, high_risk, medium_risk, low_risk, unscored"
+        tests:
+          - accepted_values:
+              values: ['default', 'watchlist', 'high_risk', 'medium_risk', 'low_risk', 'unscored']
+      - name: value_tier
+        description: "Revenue-based customer tier: platinum, gold, silver, standard"
+        tests:
+          - accepted_values:
+              values: ['platinum', 'gold', 'silver', 'standard']
+      - name: next_best_action_segment
+        description: Recommended engagement segment for marketing/collections
+        tests:
+          - accepted_values:
+              values: ['collections', 'pre_collections', 'watch', 'reactivation', 'engagement', 'nurture']
+      - name: credit_score
+        description: Latest credit score from risk engine (0-1000)
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1000
+              row_condition: "credit_score is not null"
+      - name: _mart_loaded_at
+        description: Timestamp when this record was last loaded into the mart
+        tests:
+          - not_null
+
+  - name: mart_transaction_analytics
+    description: >
+      Daily transaction aggregates enriched with customer context, anomaly detection
+      flags, and regulatory indicators. Used for fraud detection, AML monitoring,
+      and transaction pattern analysis.
+      Grain: one row per (account_id, transaction_date). Incremental by date.
+    meta:
+      owner: data-platform-team
+      tier: gold
+      sla: "refreshed by 04:00 UTC daily"
+      consumers: ["fraud_detection", "aml_monitoring", "analytics_team"]
+    columns:
+      - name: daily_summary_sk
+        description: Surrogate key (hash of account_id + transaction_date)
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        description: Account identifier (FK to mart_customer_360)
+        tests:
+          - not_null
+      - name: transaction_date
+        description: Calendar date of the transaction summary
+        tests:
+          - not_null
+      - name: total_transaction_count
+        description: Total number of transactions for this account on this date
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100000
+      - name: gross_transaction_volume
+        description: Sum of absolute transaction amounts for the day
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 9999999999.9999
+      - name: composite_daily_risk_score
+        description: "Computed daily risk score (0-100) combining multiple risk signals"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+              row_condition: "composite_daily_risk_score is not null"
+      - name: is_volume_anomaly
+        description: Flag indicating transaction volume exceeds 3 standard deviations from mean
+        tests:
+          - accepted_values:
+              values: [true, false]
+      - name: is_count_anomaly
+        description: Flag indicating transaction count exceeds 3 standard deviations from mean
+        tests:
+          - accepted_values:
+              values: [true, false]
+      - name: ctr_reportable
+        description: Currency Transaction Report threshold flag (volume > 10k with multi-country)
+      - name: sar_candidate
+        description: Suspicious Activity Report candidate flag
+      - name: _mart_loaded_at
+        description: Timestamp when this record was last loaded into the mart
+        tests:
+          - not_null
+
+  - name: mart_regulatory_exposure
+    description: >
+      Basel III/IV regulatory capital and exposure report. Calculates risk-weighted
+      assets (RWA), IFRS 9 expected credit loss (ECL) provisions, and regulatory
+      compliance flags. Full table rebuild daily to ensure regulatory accuracy.
+      Grain: one row per (account_id, reporting_date).
+    meta:
+      owner: risk-management-team
+      tier: gold
+      regulatory: true
+      sla: "refreshed by 05:00 UTC daily"
+      consumers: ["risk_management", "corep_reporting", "finance", "audit"]
+      retention_policy: "7 years (regulatory requirement)"
+    columns:
+      - name: exposure_sk
+        description: Surrogate key (hash of account_id + reporting_date)
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        description: Account identifier
+        tests:
+          - not_null
+      - name: reporting_date
+        description: Regulatory reporting date (current_date at time of run)
+        tests:
+          - not_null
+      - name: exposure_at_default
+        description: Exposure at Default (EAD) - regulatory exposure amount
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 9999999999.9999
+      - name: rwa_standardised
+        description: Risk-Weighted Assets under Basel III Standardised Approach
+        tests:
+          - not_null
+      - name: rwa_irb
+        description: Risk-Weighted Assets under Internal Ratings-Based approach
+        tests:
+          - not_null
+      - name: ifrs9_stage
+        description: "IFRS 9 impairment stage: 1 (performing), 2 (underperforming), 3 (non-performing)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3]
+      - name: ecl_provision
+        description: Expected Credit Loss provision (12-month for stage 1, lifetime for stage 2/3)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 9999999999.9999
+      - name: probability_of_default
+        description: "PD: Probability that the obligor defaults within 12 months"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              row_condition: "probability_of_default is not null"
+      - name: loss_given_default
+        description: "LGD: Estimated loss percentage if default occurs"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1
+              row_condition: "loss_given_default is not null"
+      - name: is_large_exposure
+        description: Flag for exposures exceeding large-exposure threshold
+      - name: requires_sar_review
+        description: Flag indicating account requires Suspicious Activity Report review
+      - name: kyc_remediation_required
+        description: Flag indicating KYC documentation is expired or missing
+      - name: requires_impairment_review
+        description: Flag for accounts needing manual impairment assessment
+      - name: _mart_loaded_at
+        description: Timestamp when this record was last loaded
+        tests:
+          - not_null

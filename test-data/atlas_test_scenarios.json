@@ -1,0 +1,161 @@
+{
+  "scenarios": [
+    {
+      "id": "ATLAS-CR-001",
+      "title": "Add PEP (Politically Exposed Person) flag to customer accounts",
+      "prompt": "Add a new PEP classification flag to the customer_accounts domain. This needs to flow from Oracle DWH through to the mart_customer_360 table and be included in regulatory exposure reports.",
+      "expected_classification": "DATA_PRODUCT_AMENDMENT",
+      "expected_confidence": 0.92,
+      "impact": {
+        "affected_assets": ["A-01", "A-04", "A-07", "A-09", "A-11"],
+        "affected_pipelines": ["P-01", "P-05"],
+        "affected_files": [
+          "code/ingestion/spark_jobs/customer_accounts_ingestion.py",
+          "code/transformation/models/staging/stg_customer_accounts.sql",
+          "code/transformation/models/staging/schema.yml",
+          "code/transformation/models/intermediate/int_customer_enriched.sql",
+          "code/transformation/models/marts/mart_customer_360.sql",
+          "code/transformation/models/marts/mart_regulatory_exposure.sql",
+          "code/transformation/models/marts/schema.yml",
+          "code/quality/great_expectations/expectations/customer_accounts_suite.json",
+          "code/quality/soda/checks/customer_accounts_checks.yml"
+        ],
+        "risk_level": "HIGH",
+        "regulatory_impact": true,
+        "reason": "Regulatory field addition affects Basel III/IV reporting and PRA returns"
+      },
+      "test_plan": {
+        "unit_tests": ["PEP flag type casting", "NULL handling for historical records", "PEP enum validation"],
+        "integration_tests": ["End-to-end PEP flag propagation source-to-mart", "Regulatory report field-level reconciliation"],
+        "regression_tests": ["Existing customer_360 fields unchanged", "Row count reconciliation within tolerance"],
+        "acceptance_criteria": ["PEP flag available in mart_customer_360 within 24hrs of source update", "Regulatory exposure report includes PEP-flagged customers", "No regression in existing query performance"]
+      }
+    },
+    {
+      "id": "ATLAS-CR-002",
+      "title": "Migrate FX Rates domain from Oracle to Iceberg",
+      "prompt": "Migrate the FX rates real-time market data feeds from Oracle DWH to the Iceberg lakehouse. This includes intraday spot rates, forward rates, and historical EOD rates. Must maintain sub-second query latency for the trading desk.",
+      "expected_classification": "DATA_PLATFORM_MIGRATION",
+      "expected_confidence": 0.97,
+      "impact": {
+        "affected_assets": ["new: raw_banking.fx_rates", "new: staging.stg_fx_rates", "new: marts.mart_fx_analytics"],
+        "affected_pipelines": ["new: fx_rates_streaming.py", "P-04", "P-05", "P-06"],
+        "affected_files": [
+          "code/ingestion/spark_jobs/fx_rates_streaming.py (NEW)",
+          "code/ingestion/kafka_connectors/fx_rates_source_connector.json (NEW)",
+          "code/transformation/models/staging/stg_fx_rates.sql (NEW)",
+          "code/transformation/models/marts/mart_fx_analytics.sql (NEW)",
+          "code/orchestration/dags/daily_ingestion_dag.py",
+          "code/orchestration/dags/config/dag_config.py",
+          "infrastructure/terraform/modules/streaming/main.tf",
+          "code/quality/great_expectations/expectations/fx_rates_suite.json (NEW)"
+        ],
+        "risk_level": "CRITICAL",
+        "regulatory_impact": true,
+        "reason": "Trading desk latency SLA; FCA market data requirements; dual-run reconciliation needed"
+      },
+      "test_plan": {
+        "unit_tests": ["FX rate decimal precision (6dp)", "Currency pair format validation", "Timestamp timezone handling"],
+        "integration_tests": ["Kafka → Spark Streaming → Iceberg end-to-end", "Query latency under load < 1 second"],
+        "regression_tests": ["Existing domains unaffected by new streaming job", "No Kafka consumer group conflict"],
+        "performance_tests": ["Sub-second P99 query latency with 50 concurrent users", "Streaming lag < 30 seconds for spot rates"],
+        "acceptance_criteria": ["10-day dual-run reconciliation pass", "Trading desk sign-off on query latency", "FCA compliance team approval"]
+      }
+    },
+    {
+      "id": "ATLAS-CR-003",
+      "title": "Fix timestamp precision drift in transaction reconciliation",
+      "prompt": "Reconciliation is failing for the transactions domain. The Parquet writer is truncating timestamps to millisecond precision but Oracle stores microseconds. This causes a mismatch in the dual-run comparison for 0.3% of records.",
+      "expected_classification": "DATA_PRODUCT_AMENDMENT",
+      "expected_confidence": 0.88,
+      "impact": {
+        "affected_assets": ["A-02", "A-05", "A-08", "A-10"],
+        "affected_pipelines": ["P-02", "P-05", "P-07"],
+        "affected_files": [
+          "code/ingestion/spark_jobs/transactions_streaming.py",
+          "code/transformation/models/staging/stg_transactions.sql",
+          "code/quality/great_expectations/expectations/transactions_suite.json",
+          "code/orchestration/dags/reconciliation_dag.py"
+        ],
+        "risk_level": "HIGH",
+        "regulatory_impact": true,
+        "reason": "Blocking dual-run sign-off; 10-day reconciliation window cannot start until fixed"
+      },
+      "test_plan": {
+        "unit_tests": ["Microsecond precision preserved in Parquet write", "Timestamp roundtrip Oracle → Iceberg → Trino"],
+        "integration_tests": ["Full reconciliation pass with microsecond timestamps", "No data loss during precision upgrade"],
+        "regression_tests": ["Existing transaction aggregates unchanged", "Downstream mart_transaction_analytics produces same results"],
+        "acceptance_criteria": ["Reconciliation breach drops from 0.3% to 0%", "10-day dual-run window restarts successfully", "No performance regression in streaming pipeline"]
+      }
+    },
+    {
+      "id": "ATLAS-CR-004",
+      "title": "Add new data quality checks for IBAN format compliance",
+      "prompt": "Compliance has flagged that 2% of customer account IBANs fail ISO 13616 validation. Add Soda checks and Great Expectations rules to catch malformed IBANs at ingestion time and quarantine bad records.",
+      "expected_classification": "DATA_PRODUCT_AMENDMENT",
+      "expected_confidence": 0.85,
+      "impact": {
+        "affected_assets": ["A-01", "A-04"],
+        "affected_pipelines": ["P-01", "P-06"],
+        "affected_files": [
+          "code/quality/soda/checks/customer_accounts_checks.yml",
+          "code/quality/great_expectations/expectations/customer_accounts_suite.json",
+          "code/ingestion/spark_jobs/customer_accounts_ingestion.py",
+          "code/orchestration/dags/data_quality_dag.py"
+        ],
+        "risk_level": "MEDIUM",
+        "regulatory_impact": true,
+        "reason": "PRA/FCA compliance requirement; malformed IBANs affect payment processing"
+      },
+      "test_plan": {
+        "unit_tests": ["IBAN checksum validation for GB, DE, FR, IE formats", "Quarantine routing for invalid records", "NULL IBAN handling"],
+        "integration_tests": ["Quarantine table receives bad records", "Valid records pass through unchanged", "Alert fired on breach threshold"],
+        "regression_tests": ["Existing customer_accounts row counts stable", "No false positives on valid IBANs"],
+        "acceptance_criteria": ["100% of known-bad IBANs caught", "Quarantine audit trail for compliance", "No impact on pipeline SLA"]
+      }
+    },
+    {
+      "id": "ATLAS-CR-005",
+      "title": "Onboard counterparty data domain to lakehouse",
+      "prompt": "Onboard the Counterparty Data domain (500K+ institutional counterparties) from Oracle to the Iceberg lakehouse. This is a new domain that has not yet been migrated. It includes LEI codes, credit ratings, and exposure limits.",
+      "expected_classification": "DATA_PLATFORM_MIGRATION",
+      "expected_confidence": 0.95,
+      "impact": {
+        "affected_assets": ["new: raw_banking.counterparties", "new: staging.stg_counterparties", "new: marts.mart_counterparty_exposure"],
+        "affected_pipelines": ["new: counterparty_ingestion.py", "P-04", "P-05", "P-06", "P-07"],
+        "affected_files": [
+          "code/ingestion/spark_jobs/counterparty_ingestion.py (NEW)",
+          "code/transformation/models/staging/stg_counterparties.sql (NEW)",
+          "code/transformation/models/staging/schema.yml",
+          "code/transformation/models/marts/mart_counterparty_exposure.sql (NEW)",
+          "code/transformation/models/marts/schema.yml",
+          "code/orchestration/dags/daily_ingestion_dag.py",
+          "code/orchestration/dags/config/dag_config.py",
+          "code/quality/great_expectations/expectations/counterparty_suite.json (NEW)",
+          "code/quality/soda/checks/counterparty_checks.yml (NEW)",
+          "code/governance/openmetadata/tables/counterparties.json (NEW)"
+        ],
+        "risk_level": "HIGH",
+        "regulatory_impact": true,
+        "reason": "LEI codes critical for Basel III/IV counterparty credit risk; exposure limits for trading"
+      },
+      "test_plan": {
+        "unit_tests": ["LEI code format validation (ISO 17442)", "Credit rating enum mapping", "Exposure limit decimal precision"],
+        "integration_tests": ["Full pipeline Oracle → Iceberg → Trino queryable", "Join to existing mart_regulatory_exposure"],
+        "regression_tests": ["No impact on existing 3 domain pipelines", "Airflow DAG schedule unaffected"],
+        "performance_tests": ["500K records ingested within SLA", "Query performance acceptable for risk team"],
+        "acceptance_criteria": ["10-day dual-run reconciliation pass", "Risk team sign-off", "OpenMetadata catalog populated with lineage"]
+      }
+    }
+  ],
+  "evaluation_dataset": {
+    "description": "Ground truth dataset for evaluating classification and impact analysis accuracy",
+    "metrics": {
+      "classification_accuracy": "Expected primary delivery type matches actual",
+      "confidence_calibration": "Predicted confidence correlates with actual accuracy",
+      "impact_recall": "All truly affected assets/files identified",
+      "impact_precision": "No false positive affected assets/files",
+      "risk_level_accuracy": "Predicted risk matches actual operational risk"
+    }
+  }
+}

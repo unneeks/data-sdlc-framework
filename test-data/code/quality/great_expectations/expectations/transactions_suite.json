@@ -1,0 +1,376 @@
+{
+  "expectation_suite_name": "transactions_suite",
+  "ge_cloud_id": null,
+  "data_asset_type": null,
+  "meta": {
+    "project": "ATLAS",
+    "domain": "banking",
+    "owner": "data-engineering@atlas-bank.com",
+    "description": "Data quality expectations for the transactions fact table. Validates financial amounts, transaction types, timestamp freshness, volume anomaly detection, and regulatory compliance.",
+    "regulatory_frameworks": ["BCBS 239", "PSD2", "AML/CFT", "SOX"],
+    "last_reviewed": "2026-08-15",
+    "review_cadence": "monthly",
+    "criticality": "P1 — revenue-impacting"
+  },
+  "expectations": [
+    {
+      "expectation_type": "expect_table_columns_to_match_set",
+      "kwargs": {
+        "column_set": [
+          "transaction_key",
+          "transaction_id",
+          "account_key",
+          "account_number",
+          "customer_key",
+          "transaction_type",
+          "transaction_subtype",
+          "transaction_status",
+          "amount",
+          "currency_code",
+          "amount_usd",
+          "exchange_rate",
+          "transaction_date",
+          "transaction_timestamp",
+          "posting_date",
+          "value_date",
+          "channel",
+          "merchant_name",
+          "merchant_category_code",
+          "counterparty_account",
+          "counterparty_name",
+          "reference_number",
+          "description",
+          "branch_code",
+          "is_international",
+          "is_flagged_suspicious",
+          "aml_risk_score",
+          "batch_id",
+          "source_system",
+          "ingestion_timestamp",
+          "processing_timestamp"
+        ],
+        "exact_match": false
+      }
+    },
+    {
+      "expectation_type": "expect_table_row_count_to_be_between",
+      "kwargs": {
+        "min_value": 1000000,
+        "max_value": 500000000
+      },
+      "meta": {
+        "notes": "Transaction volume bounds. Sudden drops indicate ingestion failure; spikes indicate duplication."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "transaction_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_unique",
+      "kwargs": {
+        "column": "transaction_id"
+      },
+      "meta": {
+        "notes": "Source transaction ID must be unique — duplicates indicate replay or double-posting."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "transaction_id"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "account_key"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "amount"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "amount",
+        "min_value": -99999999.99,
+        "max_value": 99999999.99
+      },
+      "meta": {
+        "notes": "Transaction amount bounds. Values exceeding +/-100M require investigation."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "amount_usd"
+      },
+      "meta": {
+        "notes": "USD-normalized amount required for regulatory reporting and analytics."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "amount_usd",
+        "min_value": -99999999.99,
+        "max_value": 99999999.99
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "transaction_type",
+        "value_set": [
+          "DEBIT",
+          "CREDIT",
+          "TRANSFER_IN",
+          "TRANSFER_OUT",
+          "PAYMENT",
+          "DEPOSIT",
+          "WITHDRAWAL",
+          "FEE",
+          "INTEREST",
+          "REVERSAL",
+          "ADJUSTMENT",
+          "DIVIDEND",
+          "LOAN_DISBURSEMENT",
+          "LOAN_REPAYMENT"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "transaction_status",
+        "value_set": [
+          "COMPLETED",
+          "PENDING",
+          "FAILED",
+          "REVERSED",
+          "CANCELLED",
+          "ON_HOLD",
+          "PROCESSING"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "currency_code",
+        "regex": "^[A-Z]{3}$"
+      },
+      "meta": {
+        "notes": "ISO 4217 currency code format."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "exchange_rate",
+        "min_value": 0.0001,
+        "max_value": 100000,
+        "mostly": 0.99
+      },
+      "meta": {
+        "notes": "Exchange rate sanity check. Extreme values indicate data corruption."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "transaction_timestamp"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "transaction_timestamp",
+        "min_value": "2020-01-01T00:00:00",
+        "max_value": "2026-12-31T23:59:59",
+        "parse_strings_as_datetimes": true
+      },
+      "meta": {
+        "notes": "Transactions should be within migration window (2020+) and not in the future."
+      }
+    },
+    {
+      "expectation_type": "expect_column_max_to_be_between",
+      "kwargs": {
+        "column": "transaction_timestamp",
+        "min_value": "2026-08-20T00:00:00",
+        "max_value": "2026-08-22T00:00:00",
+        "parse_strings_as_datetimes": true
+      },
+      "meta": {
+        "notes": "Freshness check: most recent transaction should be within the last 24 hours. Adjust dates for current run."
+      }
+    },
+    {
+      "expectation_type": "expect_column_pair_values_A_to_be_greater_than_B",
+      "kwargs": {
+        "column_A": "posting_date",
+        "column_B": "transaction_date",
+        "or_equal": true,
+        "ignore_row_if": "either_value_is_missing",
+        "mostly": 0.99
+      },
+      "meta": {
+        "notes": "Posting date should be on or after transaction date. T+1/T+2 settlement expected."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "channel",
+        "value_set": [
+          "BRANCH",
+          "ATM",
+          "ONLINE_BANKING",
+          "MOBILE_APP",
+          "POS",
+          "WIRE",
+          "ACH",
+          "CHECK",
+          "INTERNAL",
+          "API",
+          "BATCH"
+        ]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_match_regex",
+      "kwargs": {
+        "column": "merchant_category_code",
+        "regex": "^[0-9]{4}$",
+        "mostly": 0.90
+      },
+      "meta": {
+        "notes": "MCC is a 4-digit code. Not applicable to all transaction types hence 90% threshold."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "is_international",
+        "value_set": [true, false, 1, 0]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "is_flagged_suspicious",
+        "value_set": [true, false, 1, 0]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_between",
+      "kwargs": {
+        "column": "aml_risk_score",
+        "min_value": 0.0,
+        "max_value": 100.0,
+        "mostly": 0.99
+      },
+      "meta": {
+        "notes": "AML risk score normalized to 0-100 range."
+      }
+    },
+    {
+      "expectation_type": "expect_column_proportion_of_unique_values_to_be_between",
+      "kwargs": {
+        "column": "transaction_id",
+        "min_value": 0.999,
+        "max_value": 1.0
+      },
+      "meta": {
+        "notes": "Near-perfect uniqueness expected. Low values indicate batch duplication issues."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "source_system"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_be_in_set",
+      "kwargs": {
+        "column": "source_system",
+        "value_set": ["ORACLE_DWH", "CORE_BANKING", "PAYMENT_GATEWAY", "SWIFT", "ACH_PROCESSOR", "CARD_NETWORK"]
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "ingestion_timestamp"
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_be_null",
+      "kwargs": {
+        "column": "processing_timestamp"
+      }
+    },
+    {
+      "expectation_type": "expect_column_pair_values_A_to_be_greater_than_B",
+      "kwargs": {
+        "column_A": "processing_timestamp",
+        "column_B": "ingestion_timestamp",
+        "or_equal": true
+      },
+      "meta": {
+        "notes": "Processing must happen at or after ingestion — temporal ordering sanity check."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_match_regex",
+      "kwargs": {
+        "column": "description",
+        "regex": "\\b(SSN|\\d{3}-\\d{2}-\\d{4}|\\d{9})\\b",
+        "mostly": 0.9999
+      },
+      "meta": {
+        "notes": "PII detection: SSN patterns should not appear in transaction descriptions."
+      }
+    },
+    {
+      "expectation_type": "expect_column_values_to_not_match_regex",
+      "kwargs": {
+        "column": "description",
+        "regex": "\\b[0-9]{13,19}\\b",
+        "mostly": 0.999
+      },
+      "meta": {
+        "notes": "PCI-DSS: Full card numbers (13-19 digits) must not appear in transaction descriptions."
+      }
+    },
+    {
+      "expectation_type": "expect_column_stdev_to_be_between",
+      "kwargs": {
+        "column": "amount",
+        "min_value": 10,
+        "max_value": 100000
+      },
+      "meta": {
+        "notes": "Volume anomaly: standard deviation outside this range suggests data quality issues."
+      }
+    },
+    {
+      "expectation_type": "expect_column_mean_to_be_between",
+      "kwargs": {
+        "column": "amount",
+        "min_value": -10000,
+        "max_value": 10000
+      },
+      "meta": {
+        "notes": "Mean transaction amount sanity check. Large shifts indicate systematic issues."
+      }
+    }
+  ]
+}

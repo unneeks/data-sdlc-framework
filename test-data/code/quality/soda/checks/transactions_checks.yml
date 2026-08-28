@@ -1,0 +1,358 @@
+# Project ATLAS — Soda Checks: Transactions
+# Validates the fact_transaction table for volume anomalies, duplicate
+# detection, referential integrity, financial accuracy, and AML compliance.
+#
+# Data source: atlas_lakehouse (configured in soda configuration.yml)
+# Schedule: Runs hourly (critical) and after each batch ingestion
+
+checks for fact_transaction:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Row Count & Volume Anomaly Detection
+  # ─────────────────────────────────────────────────────────────────────────
+  - row_count > 0:
+      name: "Table is not empty"
+
+  - row_count between 1000000 and 500000000:
+      name: "Row count within expected bounds"
+
+  - change for row_count:
+      name: "Daily volume change within bounds"
+      warn: when > 50%
+      fail: when > 100% or when < -50%
+
+  - anomaly detection for row_count:
+      name: "Transaction volume anomaly detection"
+      warn:
+        anomaly_score > 0.7
+      fail:
+        anomaly_score > 0.9
+
+  # Hourly volume check — detect ingestion stalls
+  - failed rows:
+      name: "Transactions received in last 2 hours"
+      fail query: |
+        SELECT COUNT(*) as recent_count
+        FROM fact_transaction
+        WHERE ingestion_timestamp > CURRENT_TIMESTAMP - INTERVAL '2' HOUR
+        HAVING COUNT(*) < 100
+
+  # Day-over-day volume comparison
+  - failed rows:
+      name: "Today's volume not below 50% of yesterday"
+      fail query: |
+        WITH daily AS (
+          SELECT
+            DATE(transaction_date) as txn_date,
+            COUNT(*) as daily_count
+          FROM fact_transaction
+          WHERE transaction_date >= CURRENT_DATE - INTERVAL '2' DAY
+          GROUP BY DATE(transaction_date)
+        )
+        SELECT
+          t.txn_date,
+          t.daily_count as today_count,
+          y.daily_count as yesterday_count
+        FROM daily t
+        JOIN daily y ON t.txn_date = y.txn_date + INTERVAL '1' DAY
+        WHERE t.daily_count < y.daily_count * 0.5
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Data Freshness
+  # ─────────────────────────────────────────────────────────────────────────
+  - freshness(ingestion_timestamp) < 2h:
+      name: "Ingestion freshness (< 2 hours)"
+      warn: when > 1h
+
+  - freshness(transaction_timestamp) < 24h:
+      name: "Transaction timestamp freshness (< 24 hours)"
+
+  - freshness(processing_timestamp) < 4h:
+      name: "Processing freshness (< 4 hours)"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Duplicate Detection
+  # ─────────────────────────────────────────────────────────────────────────
+  - duplicate_count(transaction_key) = 0:
+      name: "transaction_key is unique (surrogate key)"
+
+  - duplicate_count(transaction_id) = 0:
+      name: "transaction_id is unique (business key - no double-posting)"
+
+  - duplicate_count(transaction_id, account_key, amount, transaction_timestamp) = 0:
+      name: "No duplicate transactions (composite key check)"
+
+  # Detect potential replay attacks or batch re-processing
+  - failed rows:
+      name: "No batch duplication (same batch_id repeated)"
+      fail query: |
+        SELECT batch_id, COUNT(*) as record_count, COUNT(DISTINCT transaction_id) as unique_txns
+        FROM fact_transaction
+        WHERE ingestion_timestamp > CURRENT_TIMESTAMP - INTERVAL '24' HOUR
+        GROUP BY batch_id
+        HAVING COUNT(*) != COUNT(DISTINCT transaction_id)
+        LIMIT 10
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Referential Integrity
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "All transactions reference valid accounts"
+      fail query: |
+        SELECT ft.transaction_key, ft.account_key, ft.transaction_id
+        FROM fact_transaction ft
+        LEFT JOIN dim_account da ON ft.account_key = da.account_key
+        WHERE da.account_key IS NULL
+        LIMIT 20
+
+  - failed rows:
+      name: "All transactions reference valid customers"
+      fail query: |
+        SELECT ft.transaction_key, ft.customer_key
+        FROM fact_transaction ft
+        LEFT JOIN dim_customer dc ON ft.customer_key = dc.customer_key
+        WHERE ft.customer_key IS NOT NULL
+          AND dc.customer_key IS NULL
+        LIMIT 20
+
+  - failed rows:
+      name: "All branch codes are valid"
+      fail query: |
+        SELECT ft.transaction_key, ft.branch_code
+        FROM fact_transaction ft
+        LEFT JOIN dim_branch db ON ft.branch_code = db.branch_code
+        WHERE ft.branch_code IS NOT NULL
+          AND db.branch_code IS NULL
+        LIMIT 20
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Null / Completeness Checks
+  # ─────────────────────────────────────────────────────────────────────────
+  - missing_count(transaction_key) = 0:
+      name: "transaction_key has no nulls"
+
+  - missing_count(transaction_id) = 0:
+      name: "transaction_id has no nulls"
+
+  - missing_count(account_key) = 0:
+      name: "account_key has no nulls"
+
+  - missing_count(amount) = 0:
+      name: "amount has no nulls"
+
+  - missing_count(currency_code) = 0:
+      name: "currency_code has no nulls"
+
+  - missing_count(amount_usd) = 0:
+      name: "amount_usd has no nulls (required for reporting)"
+
+  - missing_count(transaction_type) = 0:
+      name: "transaction_type has no nulls"
+
+  - missing_count(transaction_status) = 0:
+      name: "transaction_status has no nulls"
+
+  - missing_count(transaction_timestamp) = 0:
+      name: "transaction_timestamp has no nulls"
+
+  - missing_count(channel) < 1%:
+      name: "channel at least 99% complete"
+
+  - missing_count(source_system) = 0:
+      name: "source_system has no nulls"
+
+  - missing_count(ingestion_timestamp) = 0:
+      name: "ingestion_timestamp has no nulls"
+
+  - missing_count(processing_timestamp) = 0:
+      name: "processing_timestamp has no nulls"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Financial Amount Validation
+  # ─────────────────────────────────────────────────────────────────────────
+  - values in (amount) between -99999999.99 and 99999999.99:
+      name: "Transaction amounts within bounds"
+      fail: when < 99.99%
+
+  - values in (amount_usd) between -99999999.99 and 99999999.99:
+      name: "USD amounts within bounds"
+      fail: when < 99.99%
+
+  - values in (exchange_rate) between 0.0001 and 100000:
+      name: "Exchange rates are reasonable"
+      warn: when < 99%
+
+  - anomaly detection for avg(amount):
+      name: "Average transaction amount anomaly"
+      warn:
+        anomaly_score > 0.7
+      fail:
+        anomaly_score > 0.9
+
+  - anomaly detection for avg(amount_usd):
+      name: "Average USD amount anomaly"
+      warn:
+        anomaly_score > 0.7
+
+  # Large transaction monitoring (regulatory)
+  - failed rows:
+      name: "Large transactions flagged for review (> $10K USD)"
+      warn query: |
+        SELECT transaction_id, amount_usd, is_flagged_suspicious, aml_risk_score
+        FROM fact_transaction
+        WHERE ABS(amount_usd) > 10000
+          AND is_flagged_suspicious = false
+          AND aml_risk_score < 50
+          AND transaction_timestamp > CURRENT_TIMESTAMP - INTERVAL '24' HOUR
+        LIMIT 50
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Value Validity
+  # ─────────────────────────────────────────────────────────────────────────
+  - invalid_count(transaction_type) = 0:
+      name: "transaction_type contains only valid values"
+      valid values:
+        [DEBIT, CREDIT, TRANSFER_IN, TRANSFER_OUT, PAYMENT, DEPOSIT,
+         WITHDRAWAL, FEE, INTEREST, REVERSAL, ADJUSTMENT, DIVIDEND,
+         LOAN_DISBURSEMENT, LOAN_REPAYMENT]
+
+  - invalid_count(transaction_status) = 0:
+      name: "transaction_status contains only valid values"
+      valid values:
+        [COMPLETED, PENDING, FAILED, REVERSED, CANCELLED, ON_HOLD, PROCESSING]
+
+  - invalid_count(channel) = 0:
+      name: "channel contains only valid values"
+      valid values:
+        [BRANCH, ATM, ONLINE_BANKING, MOBILE_APP, POS, WIRE,
+         ACH, CHECK, INTERNAL, API, BATCH]
+
+  - invalid_count(currency_code) = 0:
+      name: "currency_code is valid ISO 4217 format"
+      valid regex: "^[A-Z]{3}$"
+
+  - invalid_count(merchant_category_code) < 5%:
+      name: "MCC codes are valid 4-digit format"
+      valid regex: "^[0-9]{4}$"
+
+  - invalid_count(source_system) = 0:
+      name: "source_system contains only known sources"
+      valid values:
+        [ORACLE_DWH, CORE_BANKING, PAYMENT_GATEWAY, SWIFT, ACH_PROCESSOR, CARD_NETWORK]
+
+  - values in (aml_risk_score) between 0 and 100:
+      name: "AML risk score within 0-100 range"
+      warn: when < 99%
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Temporal Consistency
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "Processing timestamp after ingestion timestamp"
+      fail query: |
+        SELECT transaction_key, ingestion_timestamp, processing_timestamp
+        FROM fact_transaction
+        WHERE processing_timestamp < ingestion_timestamp
+        LIMIT 20
+
+  - failed rows:
+      name: "Posting date on or after transaction date"
+      warn query: |
+        SELECT transaction_key, transaction_date, posting_date
+        FROM fact_transaction
+        WHERE posting_date < transaction_date
+          AND transaction_status = 'COMPLETED'
+        LIMIT 20
+
+  - failed rows:
+      name: "No future-dated transactions"
+      fail query: |
+        SELECT transaction_key, transaction_timestamp
+        FROM fact_transaction
+        WHERE transaction_timestamp > CURRENT_TIMESTAMP + INTERVAL '1' HOUR
+        LIMIT 10
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # PII & PCI-DSS Compliance
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "No SSN patterns in description"
+      fail query: |
+        SELECT transaction_key, description
+        FROM fact_transaction
+        WHERE description REGEXP '\\b[0-9]{3}-[0-9]{2}-[0-9]{4}\\b'
+        LIMIT 10
+
+  - failed rows:
+      name: "No full card numbers in description (PCI-DSS)"
+      fail query: |
+        SELECT transaction_key, description
+        FROM fact_transaction
+        WHERE description REGEXP '\\b[0-9]{13,19}\\b'
+          AND description NOT REGEXP '(reference|ref|id|batch)[:\\s]*[0-9]{13,19}'
+        LIMIT 10
+
+  - failed rows:
+      name: "No full card numbers in counterparty fields"
+      fail query: |
+        SELECT transaction_key, counterparty_account, counterparty_name
+        FROM fact_transaction
+        WHERE counterparty_name REGEXP '\\b[0-9]{13,19}\\b'
+        LIMIT 10
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # AML / Regulatory Checks
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "Suspicious transactions have risk scores"
+      fail query: |
+        SELECT transaction_key, is_flagged_suspicious, aml_risk_score
+        FROM fact_transaction
+        WHERE is_flagged_suspicious = true
+          AND (aml_risk_score IS NULL OR aml_risk_score = 0)
+        LIMIT 20
+
+  # Structuring detection: multiple transactions just under $10K
+  - failed rows:
+      name: "Potential structuring detection (multiple sub-$10K same day/account)"
+      warn query: |
+        SELECT
+          account_key,
+          DATE(transaction_date) as txn_date,
+          COUNT(*) as txn_count,
+          SUM(ABS(amount_usd)) as total_amount
+        FROM fact_transaction
+        WHERE ABS(amount_usd) BETWEEN 9000 AND 9999
+          AND transaction_date >= CURRENT_DATE - INTERVAL '7' DAY
+        GROUP BY account_key, DATE(transaction_date)
+        HAVING COUNT(*) >= 3 AND SUM(ABS(amount_usd)) > 10000
+        LIMIT 20
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Cross-Table Consistency
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "Transaction amounts net to zero for reversals"
+      warn query: |
+        SELECT
+          ft.reference_number,
+          SUM(ft.amount) as net_amount
+        FROM fact_transaction ft
+        WHERE ft.transaction_type = 'REVERSAL'
+          AND ft.reference_number IS NOT NULL
+          AND ft.transaction_date >= CURRENT_DATE - INTERVAL '30' DAY
+        GROUP BY ft.reference_number
+        HAVING ABS(SUM(ft.amount)) > 0.01
+        LIMIT 20
+
+  - failed rows:
+      name: "No transactions on frozen accounts"
+      fail query: |
+        SELECT ft.transaction_key, ft.account_key, da.account_status
+        FROM fact_transaction ft
+        JOIN dim_account da ON ft.account_key = da.account_key AND da.is_current = true
+        WHERE da.account_status = 'FROZEN'
+          AND ft.transaction_status = 'COMPLETED'
+          AND ft.transaction_type NOT IN ('FEE', 'INTEREST', 'ADJUSTMENT')
+          AND ft.transaction_timestamp > CURRENT_TIMESTAMP - INTERVAL '24' HOUR
+        LIMIT 10

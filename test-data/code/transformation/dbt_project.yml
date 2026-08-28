@@ -1,0 +1,55 @@
+name: atlas
+version: '1.0.0'
+config-version: 2
+
+profile: atlas
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  atlas_database: raw_banking
+  pii_hash_salt: "{{ env_var('DBT_PII_HASH_SALT', 'atlas_default_salt_change_me') }}"
+
+models:
+  atlas:
+    +materialized: view
+    +on_schema_change: append_new_columns
+    staging:
+      +materialized: view
+      +schema: staging
+      +tags: ["staging", "daily"]
+    intermediate:
+      +materialized: ephemeral
+      +schema: intermediate
+      +tags: ["intermediate", "daily"]
+    marts:
+      +materialized: incremental
+      +schema: marts
+      +tags: ["marts", "daily"]
+      +file_format: iceberg
+      +partition_by:
+        - field: partition_date
+          data_type: date
+          granularity: month
+      +incremental_strategy: merge
+      +table_properties:
+        write.format.default: parquet
+        write.parquet.compression-codec: zstd
+        write.metadata.delete-after-commit.enabled: "true"
+        write.metadata.previous-versions-max: "3"
+
+on-run-start:
+  - "{{ log('ATLAS dbt run started at ' ~ run_started_at, info=True) }}"
+
+on-run-end:
+  - "{{ log('ATLAS dbt run completed', info=True) }}"

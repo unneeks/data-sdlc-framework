@@ -1,0 +1,72 @@
+atlas:
+  target: dev
+
+  outputs:
+    local:
+      type: spark
+      method: session
+      schema: atlas_local
+      host: localhost
+      port: 10000
+      threads: 2
+      properties:
+        spark.sql.catalog.glue_catalog: org.apache.iceberg.spark.SparkCatalog
+        spark.sql.catalog.glue_catalog.catalog-impl: org.apache.iceberg.aws.glue.GlueCatalog
+        spark.sql.catalog.glue_catalog.warehouse: "s3://atlas-local-warehouse/"
+        spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+
+    dev:
+      type: spark
+      method: thrift
+      schema: atlas_dev
+      host: "{{ env_var('ATLAS_SPARK_HOST', 'emr-serverless-dev.us-east-1.amazonaws.com') }}"
+      port: 10001
+      threads: 4
+      connect_retries: 3
+      connect_timeout: 60
+      properties:
+        spark.sql.catalog.glue_catalog: org.apache.iceberg.spark.SparkCatalog
+        spark.sql.catalog.glue_catalog.catalog-impl: org.apache.iceberg.aws.glue.GlueCatalog
+        spark.sql.catalog.glue_catalog.warehouse: "s3://atlas-dev-lakehouse/warehouse/"
+        spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+        spark.sql.iceberg.handle-timestamp-without-timezone: true
+        spark.sql.sources.partitionOverwriteMode: dynamic
+
+    staging:
+      type: spark
+      method: thrift
+      schema: atlas_staging
+      host: "{{ env_var('ATLAS_SPARK_HOST_STAGING', 'emr-serverless-staging.us-east-1.amazonaws.com') }}"
+      port: 10001
+      threads: 8
+      connect_retries: 5
+      connect_timeout: 120
+      properties:
+        spark.sql.catalog.glue_catalog: org.apache.iceberg.spark.SparkCatalog
+        spark.sql.catalog.glue_catalog.catalog-impl: org.apache.iceberg.aws.glue.GlueCatalog
+        spark.sql.catalog.glue_catalog.warehouse: "s3://atlas-staging-lakehouse/warehouse/"
+        spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+        spark.sql.iceberg.handle-timestamp-without-timezone: true
+        spark.sql.sources.partitionOverwriteMode: dynamic
+        spark.sql.adaptive.enabled: true
+        spark.sql.adaptive.coalescePartitions.enabled: true
+
+    prod:
+      type: spark
+      method: thrift
+      schema: atlas_prod
+      host: "{{ env_var('ATLAS_SPARK_HOST_PROD', 'emr-serverless-prod.us-east-1.amazonaws.com') }}"
+      port: 10001
+      threads: 16
+      connect_retries: 5
+      connect_timeout: 180
+      properties:
+        spark.sql.catalog.glue_catalog: org.apache.iceberg.spark.SparkCatalog
+        spark.sql.catalog.glue_catalog.catalog-impl: org.apache.iceberg.aws.glue.GlueCatalog
+        spark.sql.catalog.glue_catalog.warehouse: "s3://atlas-prod-lakehouse/warehouse/"
+        spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+        spark.sql.iceberg.handle-timestamp-without-timezone: true
+        spark.sql.sources.partitionOverwriteMode: dynamic
+        spark.sql.adaptive.enabled: true
+        spark.sql.adaptive.coalescePartitions.enabled: true
+        spark.sql.shuffle.partitions: 200

@@ -1,0 +1,480 @@
+{
+  "id": "glossary-banking-001",
+  "name": "BankingGlossary",
+  "displayName": "ATLAS Banking Glossary",
+  "fullyQualifiedName": "BankingGlossary",
+  "description": "Enterprise business glossary for Project ATLAS. Defines authoritative terminology for banking, regulatory, risk, and compliance domains. All terms are aligned with FCA Handbook definitions, PRA Rulebook, Basel Committee publications, and IFRS standards where applicable.",
+  "version": 1.6,
+  "owner": {
+    "id": "owner-data-gov-001",
+    "type": "team",
+    "name": "Data Governance Office",
+    "displayName": "Data Governance Office"
+  },
+  "reviewers": [
+    {
+      "id": "reviewer-compliance-001",
+      "type": "user",
+      "name": "Head of Compliance"
+    },
+    {
+      "id": "reviewer-risk-001",
+      "type": "user",
+      "name": "Chief Risk Officer"
+    },
+    {
+      "id": "reviewer-finance-001",
+      "type": "user",
+      "name": "Chief Financial Officer"
+    }
+  ],
+  "terms": [
+    {
+      "id": "term-kyc-001",
+      "name": "KYC",
+      "displayName": "Know Your Customer (KYC)",
+      "fullyQualifiedName": "BankingGlossary.KYC",
+      "description": "The mandatory process of verifying the identity of clients before or during the course of doing business. Encompasses Customer Due Diligence (CDD) and Enhanced Due Diligence (EDD) for higher-risk customers. Required under the Money Laundering, Terrorist Financing and Transfer of Funds (Information on the Payer) Regulations 2017 (MLR 2017), reg. 27-38.",
+      "synonyms": ["Customer Due Diligence", "CDD", "Identity Verification", "Client Onboarding Verification"],
+      "relatedTerms": ["AML", "PEP", "EDD", "CDD"],
+      "references": [
+        {
+          "name": "FCA Financial Crime Guide",
+          "endpoint": "https://www.fca.org.uk/firms/financial-crime/financial-crime-guide"
+        },
+        {
+          "name": "MLR 2017",
+          "endpoint": "https://www.legislation.gov.uk/uksi/2017/692/contents"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Compliance",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-kyc-ops",
+        "type": "team",
+        "name": "KYC Operations"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-aml-001",
+      "name": "AML",
+      "displayName": "Anti-Money Laundering (AML)",
+      "fullyQualifiedName": "BankingGlossary.AML",
+      "description": "The set of laws, regulations, policies, and procedures designed to prevent criminals from disguising illegally obtained funds as legitimate income. In the UK, governed by the Proceeds of Crime Act 2002 (POCA), the Terrorism Act 2000, and the Money Laundering Regulations 2017. The bank's AML framework includes transaction monitoring, sanctions screening, and suspicious activity reporting to the National Crime Agency (NCA).",
+      "synonyms": ["Anti-Money Laundering", "Money Laundering Prevention", "Financial Crime Prevention"],
+      "relatedTerms": ["KYC", "SAR", "PEP", "CTF"],
+      "references": [
+        {
+          "name": "Proceeds of Crime Act 2002",
+          "endpoint": "https://www.legislation.gov.uk/ukpga/2002/29/contents"
+        },
+        {
+          "name": "JMLSG Guidance",
+          "endpoint": "https://www.jmlsg.org.uk/"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Compliance",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.FinancialCrime",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-fincrime",
+        "type": "team",
+        "name": "Financial Crime"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-pep-001",
+      "name": "PEP",
+      "displayName": "Politically Exposed Person (PEP)",
+      "fullyQualifiedName": "BankingGlossary.PEP",
+      "description": "An individual who is or has been entrusted with a prominent public function, or an immediate family member or close associate of such a person. PEP status requires Enhanced Due Diligence (EDD) per MLR 2017 reg. 35. Categories include: domestic PEPs, foreign PEPs, and international organisation PEPs. PEP status does not automatically imply involvement in criminal activity but indicates higher risk requiring enhanced scrutiny. The bank screens against Dow Jones, World-Check, and internal PEP databases.",
+      "synonyms": ["Politically Exposed Person", "Senior Political Figure", "Prominent Public Person"],
+      "relatedTerms": ["KYC", "AML", "EDD"],
+      "references": [
+        {
+          "name": "MLR 2017 reg. 35",
+          "endpoint": "https://www.legislation.gov.uk/uksi/2017/692/regulation/35"
+        },
+        {
+          "name": "FCA FG 17/6 - Treatment of PEPs",
+          "endpoint": "https://www.fca.org.uk/publication/finalised-guidance/fg17-06.pdf"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Compliance",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.FinancialCrime",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-fincrime",
+        "type": "team",
+        "name": "Financial Crime"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-sar-001",
+      "name": "SAR",
+      "displayName": "Suspicious Activity Report (SAR)",
+      "fullyQualifiedName": "BankingGlossary.SAR",
+      "description": "A report filed with the National Crime Agency (NCA) UK Financial Intelligence Unit when there is knowledge or suspicion of money laundering or terrorist financing. Filing is a legal obligation under POCA s.330-332 and Terrorism Act 2000 s.21A. SARs are subject to strict tipping-off provisions (POCA s.333A) — disclosure of a SAR filing to the subject or third parties is a criminal offence. Defence Against Money Laundering (DAML) SARs are filed when consent is sought to proceed with a suspicious transaction.",
+      "synonyms": ["Suspicious Activity Report", "Suspicious Transaction Report", "STR", "DAML"],
+      "relatedTerms": ["AML", "MLRO", "NCA"],
+      "references": [
+        {
+          "name": "POCA 2002 Part 7",
+          "endpoint": "https://www.legislation.gov.uk/ukpga/2002/29/part/7"
+        },
+        {
+          "name": "NCA SAR Guidance",
+          "endpoint": "https://www.nationalcrimeagency.gov.uk/what-we-do/crime-threats/money-laundering-and-illicit-finance/suspicious-activity-reports"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.FinancialCrime",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Classification.Restricted",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-mlro",
+        "type": "user",
+        "name": "MLRO"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-basel3-001",
+      "name": "BaselIII",
+      "displayName": "Basel III",
+      "fullyQualifiedName": "BankingGlossary.BaselIII",
+      "description": "The third iteration of the Basel Accords, a comprehensive set of reform measures developed by the Basel Committee on Banking Supervision (BCBS) to strengthen the regulation, supervision, and risk management of banks. Key components include: minimum capital requirements (CET1 ratio of 4.5%, Tier 1 of 6%, Total Capital of 8%), the Liquidity Coverage Ratio (LCR), the Net Stable Funding Ratio (NSFR), and the leverage ratio. In the UK, implemented via the PRA Rulebook (CRR/CRD IV framework, now transitioning to Basel 3.1 implementation from 1 January 2026).",
+      "synonyms": ["Basel 3", "Basel III Framework", "Basel III Accord", "Basel 3.1"],
+      "relatedTerms": ["CET1", "LCR", "NSFR", "RWA", "IFRS9"],
+      "references": [
+        {
+          "name": "Basel III: Finalising post-crisis reforms",
+          "endpoint": "https://www.bis.org/bcbs/publ/d424.htm"
+        },
+        {
+          "name": "PRA Basel 3.1 Implementation",
+          "endpoint": "https://www.bankofengland.co.uk/prudential-regulation/publication/2022/november/implementation-of-the-basel-3-1-standards"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Risk",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.Regulatory",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-risk",
+        "type": "team",
+        "name": "Enterprise Risk"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-ifrs9-001",
+      "name": "IFRS9",
+      "displayName": "IFRS 9 - Financial Instruments",
+      "fullyQualifiedName": "BankingGlossary.IFRS9",
+      "description": "International Financial Reporting Standard 9 governing recognition, classification, measurement, and impairment of financial instruments. Replaced IAS 39. Key impact for the bank: the Expected Credit Loss (ECL) model requires forward-looking provisioning across three stages: Stage 1 (12-month ECL for performing assets), Stage 2 (lifetime ECL for significantly increased credit risk), and Stage 3 (lifetime ECL for credit-impaired assets). Effective from 1 January 2018. UK-adopted via UK-IFRS.",
+      "synonyms": ["IFRS 9", "International Financial Reporting Standard 9", "Expected Credit Loss Standard"],
+      "relatedTerms": ["BaselIII", "ECL", "PD", "LGD", "EAD"],
+      "references": [
+        {
+          "name": "IFRS 9 Standard",
+          "endpoint": "https://www.ifrs.org/issued-standards/list-of-standards/ifrs-9-financial-instruments/"
+        },
+        {
+          "name": "PRA SS2/19 - IFRS 9 and capital requirements",
+          "endpoint": "https://www.bankofengland.co.uk/prudential-regulation/publication/2019/credit-risk-mitigation"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Finance",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.Risk",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-finance",
+        "type": "team",
+        "name": "Finance & Accounting"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-counterparty-exposure-001",
+      "name": "CounterpartyExposure",
+      "displayName": "Counterparty Exposure",
+      "fullyQualifiedName": "BankingGlossary.CounterpartyExposure",
+      "description": "The potential financial loss that the bank could face if a counterparty fails to meet its contractual obligations (counterparty credit risk). Measured as the current exposure (mark-to-market value) plus potential future exposure (PFE). Subject to large exposure limits under CRR Article 387-403 (25% of Tier 1 capital for single counterparty). The bank calculates counterparty exposure using the Standardised Approach for Counterparty Credit Risk (SA-CCR) as per Basel III/CRR2.",
+      "synonyms": ["Counterparty Credit Risk", "CCR", "Counterparty Risk Exposure", "Credit Exposure"],
+      "relatedTerms": ["BaselIII", "RWA", "PD", "LGD"],
+      "references": [
+        {
+          "name": "CRR Articles 387-403 (Large Exposures)",
+          "endpoint": "https://www.eba.europa.eu/regulation-and-policy/large-exposures"
+        },
+        {
+          "name": "SA-CCR (Basel)",
+          "endpoint": "https://www.bis.org/publ/bcbs279.htm"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Risk",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.Regulatory",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-credit-risk",
+        "type": "team",
+        "name": "Credit Risk"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-mlro-001",
+      "name": "MLRO",
+      "displayName": "Money Laundering Reporting Officer (MLRO)",
+      "fullyQualifiedName": "BankingGlossary.MLRO",
+      "description": "A senior individual appointed under MLR 2017 reg. 21 responsible for receiving internal suspicious activity reports (internal SARs), assessing them, and where appropriate filing SARs with the NCA. The MLRO is an FCA-approved person (SMF17 under the Senior Managers & Certification Regime). They are also responsible for ensuring the firm's AML policies, procedures, and training are adequate and up to date.",
+      "synonyms": ["Money Laundering Reporting Officer", "Nominated Officer", "MLRO SMF17"],
+      "relatedTerms": ["SAR", "AML", "KYC"],
+      "references": [
+        {
+          "name": "MLR 2017 reg. 21",
+          "endpoint": "https://www.legislation.gov.uk/uksi/2017/692/regulation/21"
+        },
+        {
+          "name": "FCA SMF17",
+          "endpoint": "https://www.fca.org.uk/firms/senior-managers-certification-regime"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Compliance",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.FinancialCrime",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-compliance",
+        "type": "team",
+        "name": "Compliance"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-psd2-001",
+      "name": "PSD2",
+      "displayName": "Payment Services Directive 2 (PSD2)",
+      "fullyQualifiedName": "BankingGlossary.PSD2",
+      "description": "EU directive (2015/2366) transposed into UK law via the Payment Services Regulations 2017 (PSR 2017). Mandates Strong Customer Authentication (SCA) for electronic payments, establishes the regulatory framework for Account Information Service Providers (AISPs) and Payment Initiation Service Providers (PISPs), and requires banks to provide Open Banking APIs. Post-Brexit, the UK retains PSD2 requirements via PSR 2017 with FCA oversight.",
+      "synonyms": ["PSD2", "Payment Services Directive", "Open Banking Regulations", "PSR 2017"],
+      "relatedTerms": ["SCA", "OpenBanking", "AISP", "PISP"],
+      "references": [
+        {
+          "name": "Payment Services Regulations 2017",
+          "endpoint": "https://www.legislation.gov.uk/uksi/2017/752/contents"
+        },
+        {
+          "name": "FCA Approach to PSR 2017",
+          "endpoint": "https://www.fca.org.uk/publications/finalised-guidance/payment-services-and-electronic-money-our-approach"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Payments",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.Regulatory",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-payments",
+        "type": "team",
+        "name": "Payments & Open Banking"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-rwa-001",
+      "name": "RWA",
+      "displayName": "Risk-Weighted Assets (RWA)",
+      "fullyQualifiedName": "BankingGlossary.RWA",
+      "description": "A bank's assets and off-balance-sheet exposures weighted according to risk to determine minimum capital requirements under Basel III. Risk weights range from 0% (sovereign debt in domestic currency) to 150%+ (speculative exposures). The bank uses the Standardised Approach for credit risk RWA calculation, transitioning to the revised Standardised Approach under Basel 3.1. Key input to CET1 ratio calculation: CET1% = CET1 Capital / Total RWA.",
+      "synonyms": ["Risk Weighted Assets", "RWA", "Risk-Adjusted Assets"],
+      "relatedTerms": ["BaselIII", "CET1", "CounterpartyExposure"],
+      "references": [
+        {
+          "name": "CRR Article 92",
+          "endpoint": "https://www.eba.europa.eu/regulation-and-policy/single-rulebook/interactive-single-rulebook/-/book/article/92"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Risk",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.Regulatory",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-risk",
+        "type": "team",
+        "name": "Enterprise Risk"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-ecl-001",
+      "name": "ECL",
+      "displayName": "Expected Credit Loss (ECL)",
+      "fullyQualifiedName": "BankingGlossary.ECL",
+      "description": "A forward-looking estimate of credit losses on financial assets, calculated as the probability-weighted present value of all cash shortfalls over the relevant time horizon. Under IFRS 9: Stage 1 assets use 12-month ECL; Stage 2 and 3 assets use lifetime ECL. Calculation requires Probability of Default (PD), Loss Given Default (LGD), and Exposure at Default (EAD) parameters. The bank's ECL models incorporate macroeconomic scenarios (base, upside, downside, severe downside) per PRA SS2/19.",
+      "synonyms": ["Expected Credit Loss", "Credit Loss Provision", "Impairment Provision", "Loan Loss Reserve"],
+      "relatedTerms": ["IFRS9", "PD", "LGD", "EAD"],
+      "references": [
+        {
+          "name": "IFRS 9 para 5.5.1-5.5.20",
+          "endpoint": "https://www.ifrs.org/issued-standards/list-of-standards/ifrs-9-financial-instruments/"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Finance",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.Risk",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-finance",
+        "type": "team",
+        "name": "Finance & Accounting"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    },
+    {
+      "id": "term-sca-001",
+      "name": "SCA",
+      "displayName": "Strong Customer Authentication (SCA)",
+      "fullyQualifiedName": "BankingGlossary.SCA",
+      "description": "A requirement under PSD2/PSR 2017 for electronic payment authentication using at least two of three independent factors: knowledge (something the customer knows, e.g., PIN), possession (something the customer has, e.g., mobile device), and inherence (something the customer is, e.g., fingerprint). Exemptions exist for low-value transactions (<GBP 30), recurring payments, and trusted beneficiaries. Enforced by FCA since 14 March 2022 for e-commerce.",
+      "synonyms": ["Strong Customer Authentication", "Two-Factor Payment Authentication", "SCA"],
+      "relatedTerms": ["PSD2", "OpenBanking"],
+      "references": [
+        {
+          "name": "FCA SCA Requirements",
+          "endpoint": "https://www.fca.org.uk/firms/strong-customer-authentication"
+        }
+      ],
+      "tags": [
+        {
+          "tagFQN": "Domain.Payments",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        },
+        {
+          "tagFQN": "Domain.Security",
+          "labelType": "Manual",
+          "state": "Confirmed"
+        }
+      ],
+      "owner": {
+        "id": "owner-payments",
+        "type": "team",
+        "name": "Payments & Open Banking"
+      },
+      "status": "Approved",
+      "mutuallyExclusive": false
+    }
+  ],
+  "metadata": {
+    "createdAt": "2024-03-01T10:00:00Z",
+    "updatedAt": "2025-02-15T16:45:00Z",
+    "totalTerms": 12,
+    "approvalWorkflow": "Draft -> Review (Domain Owner) -> Review (Compliance) -> Approved -> Published",
+    "governanceCommittee": "Data Governance Steering Committee (DGSC)",
+    "reviewCadence": "Quarterly"
+  }
+}

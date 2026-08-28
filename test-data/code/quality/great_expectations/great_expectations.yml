@@ -1,0 +1,224 @@
+# Project ATLAS — Great Expectations Configuration
+# Configures data sources, stores, and validation settings for the
+# banking data lakehouse (S3/Iceberg via AWS Glue Catalog).
+
+config_version: 3.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Data Sources
+# ─────────────────────────────────────────────────────────────────────────────
+datasources:
+  # Primary lakehouse data source — reads Iceberg tables via Athena/Spark
+  atlas_lakehouse:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: SparkDFExecutionEngine
+      module_name: great_expectations.execution_engine
+      spark_config:
+        spark.sql.catalog.glue_catalog: org.apache.iceberg.spark.SparkCatalog
+        spark.sql.catalog.glue_catalog.warehouse: s3://atlas-lakehouse-${ATLAS_ENV}/warehouse/
+        spark.sql.catalog.glue_catalog.catalog-impl: org.apache.iceberg.aws.glue.GlueCatalog
+        spark.sql.catalog.glue_catalog.io-impl: org.apache.iceberg.aws.s3.S3FileIO
+        spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+        spark.hadoop.fs.s3a.aws.credentials.provider: com.amazonaws.auth.DefaultAWSCredentialsProviderChain
+        spark.sql.catalog.glue_catalog.glue.region: us-east-1
+    data_connectors:
+      iceberg_tables:
+        class_name: RuntimeDataConnector
+        module_name: great_expectations.datasource.data_connector
+        batch_identifiers:
+          - run_date
+          - environment
+
+  # S3 raw zone — validates files before processing
+  atlas_raw_s3:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: PandasExecutionEngine
+      module_name: great_expectations.execution_engine
+    data_connectors:
+      raw_csv_connector:
+        class_name: InferredAssetS3DataConnector
+        module_name: great_expectations.datasource.data_connector
+        bucket: atlas-raw-${ATLAS_ENV}
+        prefix: ingestion/
+        default_regex:
+          group_names:
+            - data_asset_name
+            - year
+            - month
+            - day
+          pattern: (.+)/(\d{4})/(\d{2})/(\d{2})/.*\.csv
+      raw_parquet_connector:
+        class_name: InferredAssetS3DataConnector
+        module_name: great_expectations.datasource.data_connector
+        bucket: atlas-raw-${ATLAS_ENV}
+        prefix: ingestion/
+        default_regex:
+          group_names:
+            - data_asset_name
+            - year
+            - month
+            - day
+          pattern: (.+)/(\d{4})/(\d{2})/(\d{2})/.*\.parquet
+
+  # Athena query source — for complex validation queries
+  atlas_athena:
+    class_name: Datasource
+    module_name: great_expectations.datasource
+    execution_engine:
+      class_name: SqlAlchemyExecutionEngine
+      module_name: great_expectations.execution_engine
+      connection_string: awsathena+rest://@athena.us-east-1.amazonaws.com:443/atlas_${ATLAS_ENV}?s3_staging_dir=s3://atlas-athena-results-${ATLAS_ENV}/great_expectations/&work_group=atlas-ge-workgroup
+    data_connectors:
+      athena_tables:
+        class_name: InferredAssetSqlDataConnector
+        module_name: great_expectations.datasource.data_connector
+        include_schema_name: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Expectation Stores
+# ─────────────────────────────────────────────────────────────────────────────
+stores:
+  expectations_store:
+    class_name: ExpectationsStore
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: atlas-data-quality-${ATLAS_ENV}
+      prefix: great_expectations/expectations/
+
+  validations_store:
+    class_name: ValidationsStore
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: atlas-data-quality-${ATLAS_ENV}
+      prefix: great_expectations/validations/
+
+  evaluation_parameter_store:
+    class_name: EvaluationParameterStore
+
+  checkpoint_store:
+    class_name: CheckpointStore
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: atlas-data-quality-${ATLAS_ENV}
+      prefix: great_expectations/checkpoints/
+
+  profiler_store:
+    class_name: ProfilerStore
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: atlas-data-quality-${ATLAS_ENV}
+      prefix: great_expectations/profilers/
+
+expectations_store_name: expectations_store
+validations_store_name: validations_store
+evaluation_parameter_store_name: evaluation_parameter_store
+checkpoint_store_name: checkpoint_store
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Data Docs (validation reports)
+# ─────────────────────────────────────────────────────────────────────────────
+data_docs_sites:
+  s3_site:
+    class_name: SiteBuilder
+    show_how_to_buttons: false
+    store_backend:
+      class_name: TupleS3StoreBackend
+      bucket: atlas-data-quality-${ATLAS_ENV}
+      prefix: great_expectations/data_docs/
+    site_index_builder:
+      class_name: DefaultSiteIndexBuilder
+
+  local_site:
+    class_name: SiteBuilder
+    show_how_to_buttons: false
+    store_backend:
+      class_name: TupleFilesystemStoreBackend
+      base_directory: uncommitted/data_docs/local_site/
+    site_index_builder:
+      class_name: DefaultSiteIndexBuilder
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Checkpoints
+# ─────────────────────────────────────────────────────────────────────────────
+checkpoints:
+  customer_accounts_suite_checkpoint:
+    class_name: Checkpoint
+    config_version: 1.0
+    run_name_template: "atlas-customers-%Y%m%d-%H%M%S"
+    expectation_suite_name: customer_accounts_suite
+    validations:
+      - batch_request:
+          datasource_name: atlas_lakehouse
+          data_connector_name: iceberg_tables
+          data_asset_name: dim_customer
+          batch_identifiers:
+            run_date: "${RUN_DATE}"
+            environment: "${ATLAS_ENV}"
+    action_list:
+      - name: store_validation_result
+        action:
+          class_name: StoreValidationResultAction
+      - name: update_data_docs
+        action:
+          class_name: UpdateDataDocsAction
+      - name: send_slack_notification
+        action:
+          class_name: SlackNotificationAction
+          slack_webhook: ${SLACK_WEBHOOK_DATA_QUALITY}
+          notify_on: failure
+          renderer:
+            module_name: great_expectations.render.renderer.slack_renderer
+            class_name: SlackRenderer
+
+  transactions_suite_checkpoint:
+    class_name: Checkpoint
+    config_version: 1.0
+    run_name_template: "atlas-transactions-%Y%m%d-%H%M%S"
+    expectation_suite_name: transactions_suite
+    validations:
+      - batch_request:
+          datasource_name: atlas_lakehouse
+          data_connector_name: iceberg_tables
+          data_asset_name: fact_transaction
+          batch_identifiers:
+            run_date: "${RUN_DATE}"
+            environment: "${ATLAS_ENV}"
+    action_list:
+      - name: store_validation_result
+        action:
+          class_name: StoreValidationResultAction
+      - name: update_data_docs
+        action:
+          class_name: UpdateDataDocsAction
+      - name: send_slack_notification
+        action:
+          class_name: SlackNotificationAction
+          slack_webhook: ${SLACK_WEBHOOK_DATA_QUALITY}
+          notify_on: failure
+          renderer:
+            module_name: great_expectations.render.renderer.slack_renderer
+            class_name: SlackRenderer
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plugins & Anonymous Usage
+# ─────────────────────────────────────────────────────────────────────────────
+plugins_directory: plugins/
+anonymous_usage_statistics:
+  enabled: false
+  data_context_id: atlas-banking-platform
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fluent Configuration (GX 0.18+)
+# ─────────────────────────────────────────────────────────────────────────────
+fluent_datasources: {}
+
+config_variables_file_path: uncommitted/config_variables.yml
+
+include_rendered_content:
+  globally: false
+  expectation_suite: false
+  expectation_validation_result: false

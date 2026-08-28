@@ -1,0 +1,398 @@
+{
+  "id": "policy-classification-001",
+  "name": "data_classification_policy",
+  "displayName": "Data Classification and Handling Policy",
+  "fullyQualifiedName": "atlas.policies.data_classification_policy",
+  "description": "Enterprise data classification policy for Project ATLAS lakehouse. Defines handling rules for each classification tier, PII processing requirements per GDPR/UK Data Protection Act 2018, access control tiers per FCA SYSC 8, and retention requirements per regulatory obligations. Aligned with ATLAS Bank Information Security Policy ISP-2024-003.",
+  "version": 2.1,
+  "enabled": true,
+  "policyType": "DataClassification",
+  "owner": {
+    "id": "owner-infosec-001",
+    "type": "team",
+    "name": "Information Security & Data Governance",
+    "displayName": "Information Security & Data Governance"
+  },
+  "rules": [
+    {
+      "name": "pii_highly_sensitive_handling",
+      "displayName": "PII Highly Sensitive Data Handling",
+      "description": "Rules for handling highly sensitive PII including National Insurance Numbers, biometric data, and health information. Strictest controls apply.",
+      "effect": "DENY",
+      "operations": ["ViewAll", "EditAll", "ViewBasic"],
+      "condition": "matchAnyTag('PII.HighlySensitive') AND NOT hasRole('DataPrivacyOfficer', 'KYC_Compliance', 'MLRO')",
+      "resources": ["All"],
+      "handlingRequirements": {
+        "encryption": {
+          "atRest": "AES-256-GCM (AWS KMS CMK: alias/atlas-pii-restricted)",
+          "inTransit": "TLS 1.3 minimum",
+          "columnLevel": true,
+          "keyRotationDays": 90
+        },
+        "accessControl": {
+          "minimumClearance": "SC (Security Check)",
+          "approvalRequired": true,
+          "approvalAuthority": "Data Protection Officer",
+          "maxSessionDuration": "4 hours",
+          "mfaRequired": true,
+          "justificationRequired": true
+        },
+        "masking": {
+          "defaultPolicy": "FULL_REDACTION",
+          "analyticsPolicy": "TOKENIZED",
+          "displayPolicy": "LAST_4_VISIBLE",
+          "maskingFunction": "sha256_hmac_tokenize"
+        },
+        "audit": {
+          "accessLogging": "ALL_ACCESS",
+          "retentionOfLogs": "P5Y",
+          "alertOnBulkAccess": true,
+          "bulkAccessThreshold": 100,
+          "realTimeMonitoring": true
+        },
+        "retention": {
+          "maxRetention": "Duration of customer relationship + 7 years",
+          "erasureProcess": "Cryptographic erasure via KMS key deletion",
+          "erasureSLA": "30 days from validated DSAR",
+          "archivalPolicy": "NO_ARCHIVAL - must be deleted"
+        }
+      }
+    },
+    {
+      "name": "pii_sensitive_handling",
+      "displayName": "PII Sensitive Data Handling",
+      "description": "Rules for sensitive PII including names, addresses, email, phone numbers, dates of birth. Standard GDPR Article 6 lawful basis required.",
+      "effect": "DENY",
+      "operations": ["ViewAll", "EditAll"],
+      "condition": "matchAnyTag('PII.Sensitive') AND NOT hasRole('DataPrivacyOfficer', 'KYC_Compliance', 'MLRO', 'CustomerService_L2', 'DataEngineer_PII')",
+      "resources": ["All"],
+      "handlingRequirements": {
+        "encryption": {
+          "atRest": "AES-256-GCM (AWS KMS CMK: alias/atlas-pii-sensitive)",
+          "inTransit": "TLS 1.2 minimum",
+          "columnLevel": true,
+          "keyRotationDays": 180
+        },
+        "accessControl": {
+          "minimumClearance": "BPSS (Baseline Personnel Security Standard)",
+          "approvalRequired": false,
+          "roleBasedAccess": true,
+          "maxSessionDuration": "8 hours",
+          "mfaRequired": true
+        },
+        "masking": {
+          "defaultPolicy": "PARTIAL_REDACTION",
+          "analyticsPolicy": "PSEUDONYMISED",
+          "displayPolicy": "PARTIAL_MASK",
+          "maskingFunction": "partial_mask_preserve_format"
+        },
+        "audit": {
+          "accessLogging": "ALL_ACCESS",
+          "retentionOfLogs": "P3Y",
+          "alertOnBulkAccess": true,
+          "bulkAccessThreshold": 500,
+          "realTimeMonitoring": true
+        },
+        "retention": {
+          "maxRetention": "Duration of customer relationship + 6 years",
+          "erasureProcess": "Field-level nullification + audit record",
+          "erasureSLA": "30 days from validated DSAR",
+          "archivalPolicy": "Pseudonymised copy permitted for 7 years for regulatory"
+        }
+      }
+    },
+    {
+      "name": "restricted_data_handling",
+      "displayName": "Restricted Data Handling",
+      "description": "Rules for restricted business data including fraud scores, AML flags, SAR references, and PEP indicators. Access limited to compliance and financial crime teams.",
+      "effect": "DENY",
+      "operations": ["ViewAll", "EditAll", "ViewBasic"],
+      "condition": "matchAnyTag('Classification.Restricted') AND NOT hasRole('MLRO', 'FinancialCrime_Analyst', 'Compliance_Officer', 'Head_of_Risk')",
+      "resources": ["All"],
+      "handlingRequirements": {
+        "encryption": {
+          "atRest": "AES-256-GCM (AWS KMS CMK: alias/atlas-restricted)",
+          "inTransit": "TLS 1.3 minimum",
+          "columnLevel": false,
+          "keyRotationDays": 90
+        },
+        "accessControl": {
+          "minimumClearance": "SC (Security Check)",
+          "approvalRequired": true,
+          "approvalAuthority": "Head of Financial Crime",
+          "maxSessionDuration": "4 hours",
+          "mfaRequired": true,
+          "justificationRequired": true,
+          "noExportAllowed": true
+        },
+        "masking": {
+          "defaultPolicy": "FULL_REDACTION",
+          "analyticsPolicy": "AGGREGATED_ONLY",
+          "displayPolicy": "EXISTENCE_ONLY"
+        },
+        "audit": {
+          "accessLogging": "ALL_ACCESS",
+          "retentionOfLogs": "P7Y",
+          "alertOnBulkAccess": true,
+          "bulkAccessThreshold": 50,
+          "realTimeMonitoring": true,
+          "tipOffPrevention": true
+        },
+        "retention": {
+          "maxRetention": "Indefinite for SAR/AML records per Proceeds of Crime Act 2002",
+          "erasureProcess": "NOT_PERMITTED - regulatory override on GDPR erasure",
+          "archivalPolicy": "Cold storage after 5 years, immutable"
+        }
+      }
+    },
+    {
+      "name": "confidential_data_handling",
+      "displayName": "Confidential Data Handling",
+      "description": "Rules for confidential business data including account balances, transaction amounts, sort codes, and KYC status. Standard banking confidentiality applies.",
+      "effect": "DENY",
+      "operations": ["ViewAll", "EditAll"],
+      "condition": "matchAnyTag('Classification.Confidential') AND NOT hasRole('DataEngineer', 'DataAnalyst', 'RiskAnalyst', 'ProductManager', 'Compliance_Officer')",
+      "resources": ["All"],
+      "handlingRequirements": {
+        "encryption": {
+          "atRest": "AES-256 (S3 SSE-KMS: alias/atlas-confidential)",
+          "inTransit": "TLS 1.2 minimum",
+          "columnLevel": false,
+          "keyRotationDays": 365
+        },
+        "accessControl": {
+          "minimumClearance": "BPSS",
+          "approvalRequired": false,
+          "roleBasedAccess": true,
+          "maxSessionDuration": "12 hours",
+          "mfaRequired": true
+        },
+        "masking": {
+          "defaultPolicy": "NO_MASKING",
+          "analyticsPolicy": "NO_MASKING",
+          "displayPolicy": "NO_MASKING",
+          "externalSharingPolicy": "AGGREGATED_ONLY"
+        },
+        "audit": {
+          "accessLogging": "WRITE_ACCESS",
+          "retentionOfLogs": "P2Y",
+          "alertOnBulkAccess": true,
+          "bulkAccessThreshold": 10000,
+          "realTimeMonitoring": false
+        },
+        "retention": {
+          "maxRetention": "7 years from record creation",
+          "erasureProcess": "Standard deletion with audit trail",
+          "archivalPolicy": "Glacier Deep Archive after 3 years"
+        }
+      }
+    },
+    {
+      "name": "internal_data_handling",
+      "displayName": "Internal Data Handling",
+      "description": "Rules for internal operational data including timestamps, status codes, batch IDs, and non-sensitive metadata. Lowest restriction tier.",
+      "effect": "ALLOW",
+      "operations": ["ViewAll", "ViewBasic"],
+      "condition": "matchAnyTag('Classification.Internal') AND hasRole('DataEngineer', 'DataAnalyst', 'DataScientist', 'ProductManager', 'Developer')",
+      "resources": ["All"],
+      "handlingRequirements": {
+        "encryption": {
+          "atRest": "AES-256 (S3 SSE-S3)",
+          "inTransit": "TLS 1.2 minimum",
+          "columnLevel": false
+        },
+        "accessControl": {
+          "minimumClearance": "None",
+          "approvalRequired": false,
+          "roleBasedAccess": true,
+          "maxSessionDuration": "12 hours",
+          "mfaRequired": false
+        },
+        "masking": {
+          "defaultPolicy": "NO_MASKING",
+          "analyticsPolicy": "NO_MASKING",
+          "displayPolicy": "NO_MASKING"
+        },
+        "audit": {
+          "accessLogging": "NONE",
+          "retentionOfLogs": "P1Y"
+        },
+        "retention": {
+          "maxRetention": "7 years aligned with parent record",
+          "erasureProcess": "Standard lifecycle policy",
+          "archivalPolicy": "Glacier Deep Archive after 5 years"
+        }
+      }
+    }
+  ],
+  "accessTiers": [
+    {
+      "tier": 1,
+      "name": "Unrestricted",
+      "description": "Public and open data. No access controls beyond authentication.",
+      "classifications": ["Classification.Public"],
+      "roles": ["All authenticated users"],
+      "approvalProcess": "None"
+    },
+    {
+      "tier": 2,
+      "name": "Internal",
+      "description": "Internal operational data. Available to all ATLAS project team members.",
+      "classifications": ["Classification.Internal"],
+      "roles": ["DataEngineer", "DataAnalyst", "DataScientist", "ProductManager", "Developer"],
+      "approvalProcess": "Automatic via role assignment"
+    },
+    {
+      "tier": 3,
+      "name": "Confidential",
+      "description": "Sensitive business data requiring need-to-know access.",
+      "classifications": ["Classification.Confidential"],
+      "roles": ["DataEngineer", "DataAnalyst", "RiskAnalyst", "ProductManager", "Compliance_Officer"],
+      "approvalProcess": "Line manager approval via ServiceNow RITM"
+    },
+    {
+      "tier": 4,
+      "name": "Restricted",
+      "description": "Highly sensitive regulatory and financial crime data. Strict need-to-know.",
+      "classifications": ["Classification.Restricted", "PII.HighlySensitive"],
+      "roles": ["MLRO", "FinancialCrime_Analyst", "Compliance_Officer", "DataPrivacyOfficer"],
+      "approvalProcess": "Department head + DPO dual approval. Annual recertification required."
+    }
+  ],
+  "retentionSchedule": [
+    {
+      "dataCategory": "Customer PII",
+      "regulatoryBasis": "GDPR Article 5(1)(e); FCA SYSC 9.1.1R",
+      "retentionPeriod": "Duration of relationship + 6 years",
+      "disposalMethod": "Cryptographic erasure",
+      "reviewFrequency": "Annual",
+      "owner": "Data Protection Officer"
+    },
+    {
+      "dataCategory": "Financial Transactions",
+      "regulatoryBasis": "Companies Act 2006 s.388; FCA SYSC 9.1.1R; HMRC",
+      "retentionPeriod": "7 years from transaction date",
+      "disposalMethod": "Secure deletion with certificate",
+      "reviewFrequency": "Annual",
+      "owner": "Head of Finance Data"
+    },
+    {
+      "dataCategory": "AML/Financial Crime Records",
+      "regulatoryBasis": "Proceeds of Crime Act 2002; Money Laundering Regulations 2017 reg.40",
+      "retentionPeriod": "5 years from end of business relationship (minimum); indefinite if SAR filed",
+      "disposalMethod": "Not permitted while investigation open",
+      "reviewFrequency": "Quarterly",
+      "owner": "MLRO"
+    },
+    {
+      "dataCategory": "KYC/CDD Records",
+      "regulatoryBasis": "Money Laundering Regulations 2017 reg.40",
+      "retentionPeriod": "5 years from end of business relationship",
+      "disposalMethod": "Secure deletion with audit trail",
+      "reviewFrequency": "Annual",
+      "owner": "Head of KYC Operations"
+    },
+    {
+      "dataCategory": "Audit Logs",
+      "regulatoryBasis": "FCA SYSC 9; PRA General Organisational Requirements",
+      "retentionPeriod": "7 years",
+      "disposalMethod": "Lifecycle policy to Glacier then deletion",
+      "reviewFrequency": "Annual",
+      "owner": "Head of IT Security"
+    },
+    {
+      "dataCategory": "Market Data / Trading Records",
+      "regulatoryBasis": "MiFID II RTS 25; FCA MAR 9",
+      "retentionPeriod": "7 years",
+      "disposalMethod": "Secure deletion with regulatory notification",
+      "reviewFrequency": "Annual",
+      "owner": "Head of Markets Data"
+    }
+  ],
+  "gdprCompliance": {
+    "lawfulBases": {
+      "customerData": "Contract performance (Art. 6(1)(b)) and Legal obligation (Art. 6(1)(c))",
+      "marketingData": "Legitimate interest (Art. 6(1)(f)) with opt-out",
+      "fraudDetection": "Legal obligation (Art. 6(1)(c)) and Legitimate interest (Art. 6(1)(f))",
+      "employeeData": "Contract performance (Art. 6(1)(b))"
+    },
+    "dataSubjectRights": {
+      "rightOfAccess": {
+        "sla": "30 days",
+        "process": "Automated DSAR portal extracts from lakehouse via tagged columns",
+        "exemptions": ["SAR-related data (tipping off)", "Legal privilege"]
+      },
+      "rightToErasure": {
+        "sla": "30 days from validation",
+        "process": "Cryptographic erasure for PII columns; pseudonymisation where full deletion conflicts with regulatory retention",
+        "exemptions": ["Legal obligation retention", "Active SAR/investigation", "Ongoing legal proceedings"]
+      },
+      "rightToRectification": {
+        "sla": "72 hours",
+        "process": "Update via customer service; CDC propagates to lakehouse within 30 seconds"
+      },
+      "rightToPortability": {
+        "sla": "30 days",
+        "format": "CSV and JSON via Open Banking APIs",
+        "scope": "Account and transaction data provided by the data subject"
+      },
+      "rightToRestriction": {
+        "sla": "72 hours",
+        "process": "Column-level access revocation; data retained but inaccessible"
+      }
+    },
+    "crossBorderTransfers": {
+      "mechanism": "AWS EU-West-2 (London) region only. No cross-border transfer.",
+      "sccs": "Not applicable - data residency within UK",
+      "adequacyDecision": "UK GDPR applies post-Brexit via UK Data Protection Act 2018"
+    },
+    "breachNotification": {
+      "icoNotificationSla": "72 hours",
+      "dataSubjectNotificationSla": "Without undue delay if high risk",
+      "internalEscalation": "DPO within 4 hours of discovery",
+      "process": "Incident Response Plan IRP-2024-001"
+    }
+  },
+  "enforcement": {
+    "automatedEnforcement": true,
+    "policyEngine": "Apache Ranger + OpenMetadata Tag-Based Policies",
+    "scanFrequency": "Continuous (real-time for access); Daily for classification drift",
+    "violationActions": [
+      {
+        "severity": "CRITICAL",
+        "description": "Unauthorized access to Restricted/PII.HighlySensitive data",
+        "action": "Immediate access revocation, security incident raised, CISO notified within 1 hour"
+      },
+      {
+        "severity": "HIGH",
+        "description": "Bulk export of Confidential data without approval",
+        "action": "Access suspended pending review, line manager notified"
+      },
+      {
+        "severity": "MEDIUM",
+        "description": "Classification tag missing on new table/column",
+        "action": "Pipeline blocked until classification applied. Data steward notified."
+      },
+      {
+        "severity": "LOW",
+        "description": "Access to Internal data outside business hours",
+        "action": "Logged for quarterly review"
+      }
+    ]
+  },
+  "metadata": {
+    "createdBy": "DataGovernance_Team",
+    "createdAt": "2024-06-15T09:00:00Z",
+    "lastReviewedBy": "DPO_J.Smith",
+    "lastReviewedAt": "2025-01-10T14:30:00Z",
+    "nextReviewDate": "2025-07-10",
+    "approvedBy": ["CISO", "DPO", "Head_of_Compliance"],
+    "documentReference": "ATLAS-GOV-POL-001 v2.1",
+    "relatedPolicies": [
+      "ISP-2024-003 (Information Security Policy)",
+      "DPP-2024-001 (Data Protection Policy)",
+      "AUP-2024-002 (Acceptable Use Policy)",
+      "IRP-2024-001 (Incident Response Plan)"
+    ]
+  }
+}

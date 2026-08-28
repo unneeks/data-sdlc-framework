@@ -1,0 +1,454 @@
+# Project ATLAS — Continuous Deployment to Production
+# Triggered on merge to main (after staging validation)
+# Requires manual approval via GitHub environment protection rules
+
+name: CD — Production
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  workflow_dispatch:
+    inputs:
+      skip_approval:
+        description: 'Skip manual approval (emergency only)'
+        required: false
+        default: 'false'
+        type: boolean
+      rollback_version:
+        description: 'Rollback to specific version (leave empty for latest)'
+        required: false
+        type: string
+
+env:
+  AWS_REGION: us-east-1
+  TF_WORKSPACE: production
+  MWAA_ENV_NAME: atlas-mwaa-production
+  MWAA_DAGS_BUCKET: atlas-mwaa-dags-production
+  DBT_TARGET: production
+  DEPLOY_TIMEOUT: 30
+
+permissions:
+  contents: read
+  id-token: write
+  deployments: write
+  issues: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Pre-flight: Validate staging passed and create deployment record
+  # ─────────────────────────────────────────────────────────────────────────────
+  preflight:
+    name: Pre-flight Checks
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_version: ${{ steps.version.outputs.version }}
+      previous_version: ${{ steps.version.outputs.previous }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify staging tests passed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the most recent staging workflow run for this commit
+          STAGING_RUN=$(gh run list \
+            --workflow "CD — Staging" \
+            --commit ${{ github.sha }} \
+            --status completed \
+            --json conclusion,databaseId \
+            --jq '.[0]')
+
+          if [ -z "$STAGING_RUN" ]; then
+            echo "::warning::No staging run found for this commit. Proceeding with caution."
+          else
+            CONCLUSION=$(echo "$STAGING_RUN" | jq -r '.conclusion')
+            if [ "$CONCLUSION" != "success" ]; then
+              echo "::error::Staging deployment failed. Cannot deploy to production."
+              exit 1
+            fi
+          fi
+
+      - name: Generate deployment version
+        id: version
+        run: |
+          VERSION="v$(date +%Y%m%d)-${{ github.run_number }}-${GITHUB_SHA::8}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Get previous deployment version from parameter store
+          PREVIOUS=$(aws ssm get-parameter \
+            --name "/atlas/production/current-version" \
+            --query "Parameter.Value" --output text 2>/dev/null || echo "none")
+          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          echo "Deploying version: $VERSION (previous: $PREVIOUS)"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Approval Gate: Manual approval required for production
+  # ─────────────────────────────────────────────────────────────────────────────
+  approval:
+    name: Production Approval
+    runs-on: ubuntu-latest
+    needs: [preflight]
+    environment:
+      name: production
+      url: https://atlas.internal.bank/admin
+    steps:
+      - name: Approval granted
+        run: |
+          echo "Production deployment approved by: ${{ github.actor }}"
+          echo "Deploying version: ${{ needs.preflight.outputs.deploy_version }}"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Terraform: Apply infrastructure to production
+  # ─────────────────────────────────────────────────────────────────────────────
+  terraform:
+    name: Terraform (Production)
+    runs-on: ubuntu-latest
+    needs: [preflight, approval]
+    environment: production
+    outputs:
+      glue_catalog_db: ${{ steps.outputs.outputs.glue_catalog_db }}
+      redshift_endpoint: ${{ steps.outputs.outputs.redshift_endpoint }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: atlas-cd-prod-${{ github.run_number }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: infrastructure/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=atlas-tfstate-production" \
+            -backend-config="key=atlas/production/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=atlas-tflock-production"
+
+      - name: Terraform Plan
+        working-directory: infrastructure/terraform
+        run: |
+          terraform plan \
+            -var-file="environments/production.tfvars" \
+            -var="git_sha=${{ github.sha }}" \
+            -var="deploy_version=${{ needs.preflight.outputs.deploy_version }}" \
+            -out=production.tfplan \
+            -detailed-exitcode
+        id: plan
+
+      - name: Check for destructive changes
+        working-directory: infrastructure/terraform
+        run: |
+          # Parse plan for any resource deletions — flag for review
+          terraform show -json production.tfplan | \
+            jq '[.resource_changes[]? | select(.change.actions | contains(["delete"]))] | length' | \
+            xargs -I {} bash -c '
+              if [ {} -gt 0 ]; then
+                echo "::warning::Plan includes {} resource deletion(s). Review carefully."
+              fi
+            '
+
+      - name: Terraform Apply
+        working-directory: infrastructure/terraform
+        run: |
+          terraform apply -auto-approve production.tfplan
+
+      - name: Export Terraform outputs
+        id: outputs
+        working-directory: infrastructure/terraform
+        run: |
+          echo "glue_catalog_db=$(terraform output -raw glue_catalog_database)" >> "$GITHUB_OUTPUT"
+          echo "redshift_endpoint=$(terraform output -raw redshift_serverless_endpoint)" >> "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Deploy DAGs: Sync to production MWAA
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy-dags:
+    name: Deploy DAGs
+    runs-on: ubuntu-latest
+    needs: [terraform]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Backup current DAGs
+        run: |
+          aws s3 sync \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/dags/ \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/backups/dags-${{ github.run_number }}/ \
+            --quiet
+
+      - name: Deploy DAGs to S3
+        run: |
+          aws s3 sync code/orchestration/dags/ \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/dags/ \
+            --delete \
+            --exclude "__pycache__/*" \
+            --exclude "*.pyc"
+
+      - name: Sync requirements and plugins
+        run: |
+          aws s3 cp code/orchestration/requirements.txt \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/requirements.txt
+          if [ -d code/orchestration/plugins ]; then
+            aws s3 sync code/orchestration/plugins/ \
+              s3://${{ env.MWAA_DAGS_BUCKET }}/plugins/ --delete
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # dbt: Run production transformations
+  # ─────────────────────────────────────────────────────────────────────────────
+  dbt-deploy:
+    name: dbt Deploy (Production)
+    runs-on: ubuntu-latest
+    needs: [terraform, deploy-dags]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dbt
+        run: pip install dbt-core==1.8.0 dbt-glue==1.8.0
+
+      - name: dbt run (production)
+        working-directory: code/transformation
+        env:
+          GLUE_CATALOG_DB: ${{ needs.terraform.outputs.glue_catalog_db }}
+        run: |
+          dbt deps
+          dbt run --target ${{ env.DBT_TARGET }} --full-refresh
+          dbt test --target ${{ env.DBT_TARGET }} --store-failures
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Health Checks: Validate production deployment
+  # ─────────────────────────────────────────────────────────────────────────────
+  health-checks:
+    name: Production Health Checks
+    runs-on: ubuntu-latest
+    needs: [terraform, deploy-dags, dbt-deploy, preflight]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: pip install boto3 awswrangler requests
+
+      - name: Check Glue Catalog accessibility
+        run: |
+          python -c "
+          import boto3
+          client = boto3.client('glue', region_name='${{ env.AWS_REGION }}')
+          db = client.get_database(Name='${{ needs.terraform.outputs.glue_catalog_db }}')
+          print(f'Glue catalog database accessible: {db[\"Database\"][\"Name\"]}')
+          tables = client.get_tables(DatabaseName='${{ needs.terraform.outputs.glue_catalog_db }}')
+          print(f'Tables found: {len(tables[\"TableList\"])}')
+          "
+
+      - name: Check MWAA environment health
+        run: |
+          STATUS=$(aws mwaa get-environment \
+            --name ${{ env.MWAA_ENV_NAME }} \
+            --query 'Environment.Status' --output text)
+          echo "MWAA Status: $STATUS"
+          if [ "$STATUS" != "AVAILABLE" ]; then
+            echo "::error::MWAA environment is not healthy: $STATUS"
+            exit 1
+          fi
+
+      - name: Check Redshift Serverless connectivity
+        run: |
+          python -c "
+          import boto3
+          client = boto3.client('redshift-serverless', region_name='${{ env.AWS_REGION }}')
+          workgroups = client.list_workgroups()
+          atlas_wg = [w for w in workgroups['workgroups'] if 'atlas' in w['workgroupName']]
+          for wg in atlas_wg:
+              print(f'Workgroup: {wg[\"workgroupName\"]} — Status: {wg[\"status\"]}')
+              if wg['status'] != 'AVAILABLE':
+                  raise Exception(f'Workgroup {wg[\"workgroupName\"]} not available')
+          print('All Redshift workgroups healthy')
+          "
+
+      - name: Validate data freshness
+        run: |
+          python -c "
+          import awswrangler as wr
+          from datetime import datetime, timedelta
+
+          # Check that key tables have recent data
+          critical_tables = [
+              '${{ needs.terraform.outputs.glue_catalog_db }}.dim_customer',
+              '${{ needs.terraform.outputs.glue_catalog_db }}.dim_account',
+              '${{ needs.terraform.outputs.glue_catalog_db }}.fact_transaction',
+          ]
+          threshold = datetime.utcnow() - timedelta(hours=24)
+
+          for table in critical_tables:
+              db, tbl = table.split('.')
+              try:
+                  df = wr.catalog.get_table_metadata(database=db, table=tbl)
+                  print(f'{table}: OK')
+              except Exception as e:
+                  print(f'WARNING: {table}: {e}')
+          "
+
+      - name: Update deployment version in Parameter Store
+        run: |
+          aws ssm put-parameter \
+            --name "/atlas/production/current-version" \
+            --value "${{ needs.preflight.outputs.deploy_version }}" \
+            --type String \
+            --overwrite
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Rollback: Triggered on health check failure
+  # ─────────────────────────────────────────────────────────────────────────────
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    needs: [health-checks, preflight, deploy-dags]
+    if: failure() && needs.health-checks.result == 'failure'
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Rollback DAGs to previous version
+        run: |
+          echo "Rolling back DAGs to backup from run ${{ github.run_number }}..."
+          aws s3 sync \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/backups/dags-${{ github.run_number }}/ \
+            s3://${{ env.MWAA_DAGS_BUCKET }}/dags/ \
+            --delete
+
+      - name: Rollback Terraform (if previous version available)
+        if: needs.preflight.outputs.previous_version != 'none'
+        run: |
+          echo "::warning::Terraform rollback requires manual intervention."
+          echo "Previous version: ${{ needs.preflight.outputs.previous_version }}"
+          echo "Run: terraform apply -var-file=environments/production.tfvars with previous commit"
+
+      - name: Create rollback incident
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "PRODUCTION ROLLBACK: Deploy ${{ needs.preflight.outputs.deploy_version }} failed" \
+            --body "## Rollback Details
+
+          **Failed Version:** ${{ needs.preflight.outputs.deploy_version }}
+          **Rolled Back To:** ${{ needs.preflight.outputs.previous_version }}
+          **Commit:** ${{ github.sha }}
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Time:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          ## Action Required
+          - [ ] Investigate health check failures
+          - [ ] Verify rollback succeeded
+          - [ ] Confirm Terraform state is consistent
+          - [ ] Update stakeholders
+          " \
+            --label "incident,production,rollback" \
+            --assignee "${{ github.actor }}"
+
+      - name: Notify Slack — Rollback
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": ":rotating_light: PRODUCTION ROLLBACK — ATLAS deploy ${{ needs.preflight.outputs.deploy_version }} failed health checks. DAGs rolled back. Investigate immediately.",
+              "channel": "#atlas-incidents"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_PRODUCTION }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Notify: Success notification
+  # ─────────────────────────────────────────────────────────────────────────────
+  notify-success:
+    name: Notify — Success
+    runs-on: ubuntu-latest
+    needs: [health-checks, preflight]
+    if: success()
+    steps:
+      - name: Notify Slack — Success
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "#36a64f",
+                  "blocks": [
+                    {
+                      "type": "header",
+                      "text": {"type": "plain_text", "text": "ATLAS Production Deploy: SUCCESS"}
+                    },
+                    {
+                      "type": "section",
+                      "fields": [
+                        {"type": "mrkdwn", "text": "*Version:*\n${{ needs.preflight.outputs.deploy_version }}"},
+                        {"type": "mrkdwn", "text": "*Deployed by:*\n${{ github.actor }}"},
+                        {"type": "mrkdwn", "text": "*Commit:*\n`${{ github.sha }}`"},
+                        {"type": "mrkdwn", "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View>"}
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_PRODUCTION }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

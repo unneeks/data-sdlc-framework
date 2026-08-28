@@ -1,0 +1,268 @@
+# Project ATLAS — Soda Checks: Customer Accounts
+# Validates the dim_customer table for completeness, freshness,
+# schema compliance, PII detection, and regulatory requirements.
+#
+# Data source: atlas_lakehouse (configured in soda configuration.yml)
+# Schedule: Runs after each ingestion pipeline completion and in CI/CD
+
+checks for dim_customer:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Row Count & Volume
+  # ─────────────────────────────────────────────────────────────────────────
+  - row_count > 0:
+      name: "Table is not empty"
+
+  - row_count between 50000 and 50000000:
+      name: "Row count within expected bounds"
+
+  - change for row_count < 50%:
+      name: "No sudden row count drop (< 50% change)"
+      warn: when between 20% and 50%
+
+  - anomaly detection for row_count:
+      name: "Row count anomaly detection"
+      warn:
+        anomaly_score > 0.7
+      fail:
+        anomaly_score > 0.9
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Data Freshness
+  # ─────────────────────────────────────────────────────────────────────────
+  - freshness(ingestion_timestamp) < 24h:
+      name: "Data ingested within last 24 hours"
+
+  - freshness(effective_from) < 48h:
+      name: "SCD records updated within 48 hours"
+      warn: when > 24h
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Schema Validation
+  # ─────────────────────────────────────────────────────────────────────────
+  - schema:
+      name: "Schema matches data contract"
+      warn:
+        when required column missing:
+          [customer_key, customer_id, account_number, account_type,
+           customer_name, kyc_status, risk_rating, account_status,
+           account_open_date, source_system, ingestion_timestamp,
+           effective_from, effective_to, is_current, record_hash]
+      fail:
+        when required column missing:
+          [customer_key, customer_id, account_number, customer_name,
+           kyc_status, account_status]
+        when wrong column type:
+          customer_key: integer
+          customer_id: varchar
+          account_number: varchar
+          amount: decimal
+          credit_score: integer
+          annual_income: decimal
+          date_of_birth: date
+          account_open_date: date
+          ingestion_timestamp: timestamp
+          effective_from: timestamp
+          is_current: boolean
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Null / Completeness Checks
+  # ─────────────────────────────────────────────────────────────────────────
+  - missing_count(customer_key) = 0:
+      name: "customer_key has no nulls"
+
+  - missing_count(customer_id) = 0:
+      name: "customer_id has no nulls"
+
+  - missing_count(account_number) = 0:
+      name: "account_number has no nulls"
+
+  - missing_count(customer_name) < 0.1%:
+      name: "customer_name 99.9% complete"
+
+  - missing_count(kyc_status) = 0:
+      name: "kyc_status has no nulls (regulatory requirement)"
+
+  - missing_count(account_status) = 0:
+      name: "account_status has no nulls"
+
+  - missing_count(account_open_date) = 0:
+      name: "account_open_date has no nulls"
+
+  - missing_count(ingestion_timestamp) = 0:
+      name: "ingestion_timestamp has no nulls"
+
+  - missing_count(effective_from) = 0:
+      name: "effective_from has no nulls (SCD requirement)"
+
+  - missing_count(risk_rating) < 1%:
+      name: "risk_rating 99% complete"
+
+  - missing_count(email_address) < 10%:
+      name: "email_address at least 90% complete"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Uniqueness & Duplicates
+  # ─────────────────────────────────────────────────────────────────────────
+  - duplicate_count(customer_key) = 0:
+      name: "customer_key is unique (surrogate key)"
+
+  - duplicate_count(record_hash) = 0:
+      name: "record_hash is unique (change detection)"
+
+  - duplicate_count(customer_id, effective_from) = 0:
+      name: "SCD2 composite key is unique"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Value Validity
+  # ─────────────────────────────────────────────────────────────────────────
+  - invalid_count(account_type) = 0:
+      name: "account_type contains only valid values"
+      valid values:
+        [CHECKING, SAVINGS, MONEY_MARKET, CERTIFICATE_OF_DEPOSIT,
+         LOAN, MORTGAGE, CREDIT_LINE, INVESTMENT, RETIREMENT, TRUST]
+
+  - invalid_count(kyc_status) = 0:
+      name: "kyc_status contains only valid states"
+      valid values:
+        [VERIFIED, PENDING, EXPIRED, REJECTED, UNDER_REVIEW, ENHANCED_DUE_DILIGENCE]
+
+  - invalid_count(risk_rating) = 0:
+      name: "risk_rating contains only valid values"
+      valid values: [LOW, MEDIUM, HIGH, VERY_HIGH, PROHIBITED]
+
+  - invalid_count(account_status) = 0:
+      name: "account_status contains only valid values"
+      valid values: [ACTIVE, DORMANT, FROZEN, CLOSED, SUSPENDED, PENDING_CLOSURE]
+
+  - invalid_count(employment_status) = 0:
+      name: "employment_status contains only valid values"
+      valid values: [EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT, OTHER]
+
+  - invalid_count(source_system) = 0:
+      name: "source_system contains only known sources"
+      valid values: [ORACLE_DWH, CORE_BANKING, CRM, ONBOARDING, MIGRATION_SEED]
+
+  - invalid_count(country_code) = 0:
+      name: "country_code is valid ISO 3166-1 alpha-2"
+      valid regex: "^[A-Z]{2}$"
+
+  - values in (credit_score) between 300 and 850:
+      name: "credit_score within FICO range"
+      warn: when < 95%
+
+  - values in (annual_income) >= 0:
+      name: "annual_income is non-negative"
+      warn: when < 98%
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # PII Detection & Data Masking Validation
+  # ─────────────────────────────────────────────────────────────────────────
+  - invalid_count(customer_name) = 0:
+      name: "No SSN patterns in customer_name"
+      valid regex: "^(?!.*\\b\\d{3}-\\d{2}-\\d{4}\\b).*$"
+
+  - invalid_count(email_address) < 0.1%:
+      name: "email_address matches valid format"
+      valid regex: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+  # Verify PII fields are not accidentally exposed in plain text where masking is expected
+  - failed rows:
+      name: "No unmasked card numbers in address fields"
+      fail query: |
+        SELECT customer_key, address_line_1
+        FROM dim_customer
+        WHERE address_line_1 REGEXP '\\b[0-9]{13,19}\\b'
+        LIMIT 10
+
+  - failed rows:
+      name: "No test/dummy records in production"
+      fail query: |
+        SELECT customer_key, customer_name
+        FROM dim_customer
+        WHERE UPPER(customer_name) REGEXP '^(TEST|DUMMY|FAKE|XXX|DELETE ME)'
+          AND account_status = 'ACTIVE'
+        LIMIT 10
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Referential Integrity
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "All accounts reference valid branches"
+      fail query: |
+        SELECT c.customer_key, c.branch_code
+        FROM dim_customer c
+        LEFT JOIN dim_branch b ON c.branch_code = b.branch_code
+        WHERE c.branch_code IS NOT NULL
+          AND b.branch_code IS NULL
+        LIMIT 20
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Business Rules & Regulatory
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "Closed accounts have close_date"
+      fail query: |
+        SELECT customer_key, account_status, account_close_date
+        FROM dim_customer
+        WHERE account_status = 'CLOSED'
+          AND account_close_date IS NULL
+        LIMIT 20
+
+  - failed rows:
+      name: "Close date is after open date"
+      fail query: |
+        SELECT customer_key, account_open_date, account_close_date
+        FROM dim_customer
+        WHERE account_close_date IS NOT NULL
+          AND account_close_date < account_open_date
+        LIMIT 20
+
+  - failed rows:
+      name: "KYC verified accounts have verification date"
+      fail query: |
+        SELECT customer_key, kyc_status, kyc_verified_date
+        FROM dim_customer
+        WHERE kyc_status = 'VERIFIED'
+          AND kyc_verified_date IS NULL
+        LIMIT 20
+
+  - failed rows:
+      name: "HIGH/VERY_HIGH risk customers have KYC review"
+      warn query: |
+        SELECT customer_key, risk_rating, kyc_status
+        FROM dim_customer
+        WHERE risk_rating IN ('HIGH', 'VERY_HIGH', 'PROHIBITED')
+          AND kyc_status NOT IN ('VERIFIED', 'ENHANCED_DUE_DILIGENCE', 'UNDER_REVIEW')
+        LIMIT 20
+
+  - failed rows:
+      name: "PROHIBITED risk customers are not ACTIVE"
+      fail query: |
+        SELECT customer_key, risk_rating, account_status
+        FROM dim_customer
+        WHERE risk_rating = 'PROHIBITED'
+          AND account_status = 'ACTIVE'
+        LIMIT 10
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SCD Type 2 Integrity
+  # ─────────────────────────────────────────────────────────────────────────
+  - failed rows:
+      name: "Only one current record per customer"
+      fail query: |
+        SELECT customer_id, COUNT(*) as current_count
+        FROM dim_customer
+        WHERE is_current = true
+        GROUP BY customer_id
+        HAVING COUNT(*) > 1
+        LIMIT 20
+
+  - failed rows:
+      name: "effective_to is null for current records"
+      fail query: |
+        SELECT customer_key, customer_id, effective_from, effective_to, is_current
+        FROM dim_customer
+        WHERE is_current = true
+          AND effective_to IS NOT NULL
+        LIMIT 20
