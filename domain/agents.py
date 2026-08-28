@@ -4,6 +4,8 @@ Domain entities for Agents, Skills, Tools, Knowledge Packs, Policies, and Delive
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
+from domain.orchestration import AgentRuntimeKind
+
 class Tool(BaseModel):
     id: str
     name: str
@@ -48,6 +50,7 @@ class Agent(BaseModel):
     autonomy_level: str = "SEMI_AUTOMATIC"  # AUTOMATIC, SEMI_AUTOMATIC, APPROVAL_REQUIRED
     trust_score: float = 0.94
     certification_status: str = "CERTIFIED"  # CERTIFIED, EVALUATING, DEPRECATED
+    execution_kind: AgentRuntimeKind = AgentRuntimeKind.SERVER_RUN
 
 class DeliveryContract(BaseModel):
     id: str

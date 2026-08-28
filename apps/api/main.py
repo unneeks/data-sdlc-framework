@@ -3,6 +3,7 @@ FastAPI Backend Server for Agentic Data Engineering Engineering System.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 import json
 from pathlib import Path
 
@@ -16,6 +17,11 @@ from domain.classifier import DeliveryTypeClassifier
 from domain.graph import DigitalTwinGraph
 from domain.evaluation import EvaluationEngine
 from demo.scenarios import ScenarioRunner
+from domain.orchestration import AgentEvent, StepStatus, SystemMode
+from harness.bus import EventBus
+from harness.config import harness_config
+from harness.orchestrator import Orchestrator
+from harness import store as harness_store
 
 app = FastAPI(
     title="Agentic Data Engineering Platform API",
@@ -59,6 +65,21 @@ classifier = DeliveryTypeClassifier(delivery_types_data, [
 graph_engine = DigitalTwinGraph(project_seed if isinstance(project_seed, dict) else {})
 eval_engine = EvaluationEngine()
 scenario_runner = ScenarioRunner()
+
+# Agent Core Harness wiring: the bus + orchestrator are created at startup
+# (they need a running event loop). Regular agent loops are only ever handed
+# `event_bus.publish`; only the Orchestrator instance holds the full bus.
+event_bus: EventBus = None
+orchestrator: Orchestrator = None
+
+
+@app.on_event("startup")
+async def start_harness():
+    global event_bus, orchestrator
+    event_bus = EventBus()
+    orchestrator = Orchestrator(event_bus, harness_config)
+    app.state.orchestrator_task = asyncio.create_task(orchestrator.run())
+
 
 @app.get("/api/status")
 def read_root():
@@ -136,8 +157,42 @@ def get_cli_commands():
         ]
     }
 
+@app.get("/api/harness/mode")
+def get_harness_mode():
+    return {"mode": harness_config.mode}
+
+@app.post("/api/harness/mode")
+def set_harness_mode(payload: dict):
+    harness_config.mode = SystemMode(payload["mode"])
+    return {"mode": harness_config.mode}
+
+@app.get("/api/harness/steps/{session_id}")
+def get_harness_session_steps(session_id: str):
+    return harness_store.get_session_steps(session_id)
+
+@app.post("/api/harness/callback")
+async def harness_client_callback(payload: dict):
+    step_id = payload["step_id"]
+    step = harness_store.get_step(step_id)
+    if step is None or step.status != StepStatus.AWAITING_CALLBACK:
+        return JSONResponse(status_code=409, content={"error": "no step awaiting callback for this step_id"})
+
+    step.status = StepStatus(payload["status"])
+    step.output_payload = payload.get("output")
+
+    event = AgentEvent(
+        event_type="CLIENT_CALLBACK_RECEIVED",
+        source_agent_id=step.agent_id,
+        session_id=step.session_id,
+        payload={"step_id": step.id, "status": step.status, "output": step.output_payload},
+    )
+    resolved = await event_bus.resolve_callback(step_id, event)
+    if not resolved:
+        return JSONResponse(status_code=409, content={"error": "no loop is currently awaiting this step_id"})
+    return {"step_id": step.id, "status": step.status}
+
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 dist_dir = Path(__file__).resolve().parent.parent / "web" / "dist"
 if dist_dir.exists():
