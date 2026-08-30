@@ -1,0 +1,39 @@
+{
+  "account_id": "553644760112",
+  "region": "us-west-2",
+  "role_name": "HarnessExecutionRole",
+  "role_arn": "arn:aws:iam::553644760112:role/HarnessExecutionRole",
+  "model_id": "us.anthropic.claude-opus-4-6-v1",
+  "harnesses": {
+    "impact-analysis-agent": {
+      "harness_id": "dsdlc_impact_analysis_agent_142486-v4c6oC2b9c",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/dsdlc_impact_analysis_agent_142486-v4c6oC2b9c",
+      "harness_name": "dsdlc_impact_analysis_agent_142486",
+      "status": "READY"
+    },
+    "regression-agent": {
+      "harness_id": "dsdlc_regression_agent_9d0238-xJAr9bIoMw",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/dsdlc_regression_agent_9d0238-xJAr9bIoMw",
+      "harness_name": "dsdlc_regression_agent_9d0238",
+      "status": "READY"
+    },
+    "data-quality-agent": {
+      "harness_id": "dsdlc_data_quality_agent_76f8f2-qaULiaPV48",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/dsdlc_data_quality_agent_76f8f2-qaULiaPV48",
+      "harness_name": "dsdlc_data_quality_agent_76f8f2",
+      "status": "READY"
+    },
+    "data-model-composer": {
+      "harness_id": "dsdlc_data_model_composer_cbceaa-2Ael4NlRpV",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/dsdlc_data_model_composer_cbceaa-2Ael4NlRpV",
+      "harness_name": "dsdlc_data_model_composer_cbceaa",
+      "status": "READY"
+    },
+    "delivery-compliance-agent": {
+      "harness_id": "dsdlc_delivery_compliance_agent_759ae8-h1vnMlVlbk",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/dsdlc_delivery_compliance_agent_759ae8-h1vnMlVlbk",
+      "harness_name": "dsdlc_delivery_compliance_agent_759ae8",
+      "status": "READY"
+    }
+  }
+}

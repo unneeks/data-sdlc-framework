@@ -322,6 +322,21 @@ agent_runner = AgentRunner(
 _active_workflow: WorkflowRunner | None = None
 
 
+@app.post("/api/agents/mode")
+def set_agent_mode(payload: dict):
+    """Switch agent runner between DEMO and REAL modes."""
+    new_mode = payload.get("mode", "DEMO").upper()
+    if new_mode not in ("DEMO", "REAL"):
+        return JSONResponse(status_code=400, content={"error": "mode must be DEMO or REAL"})
+    agent_runner.mode = new_mode
+    if new_mode == "REAL":
+        agent_runner.reload_harness_config()
+    return {
+        "mode": agent_runner.mode,
+        "harness_arns": dict(agent_runner._harness_arns) if new_mode == "REAL" else {},
+    }
+
+
 @app.get("/api/agents/harness")
 def get_harness_agents():
     """List all metamodel agents with harness implementation status."""

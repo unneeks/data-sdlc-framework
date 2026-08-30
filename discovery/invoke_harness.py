@@ -25,6 +25,7 @@ import boto3
 
 from discovery.tools.walk import walk_repository
 from discovery.tools.read import read_file
+from discovery.tools.deep_walk import deep_walk_repository
 from discovery.tools.ingest import ingest_entities, ingest_relationships, get_graph_state
 
 HARNESS_ARN = "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/discovery_agent-7j9EL4p1Db"
@@ -52,6 +53,11 @@ def _execute_tool(tool_name: str, tool_input: dict) -> str:
         result = ingest_relationships(
             tool_input["project_id"],
             tool_input["relationships"],
+        )
+    elif tool_name == "deep_walk_repository":
+        result = deep_walk_repository(
+            tool_input["repository_root"],
+            extra_exclude_dirs=tool_input.get("extra_exclude_dirs", []),
         )
     else:
         result = {"error": f"Unknown tool: {tool_name}"}

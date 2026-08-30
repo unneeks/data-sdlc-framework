@@ -31,13 +31,13 @@ import boto3
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent
 
-ROLE_NAME = "DataSDLC_HarnessExecutionRole"
-POLICY_NAME = "DataSDLC_HarnessExecutionPolicy"
+ROLE_NAME = "HarnessExecutionRole"
+POLICY_NAME = "HarnessExecutionPolicy"
 CONFIG_FILE = PROJECT_ROOT / "agentcore_config.json"
 
 REGION = os.environ.get("AWS_DEFAULT_REGION") or os.environ.get("AWS_REGION") or "us-west-2"
 
-MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+MODEL_ID = "us.anthropic.claude-opus-4-6-v1"
 
 # The five metamodel agents to provision
 AGENT_KEYS = [
@@ -254,8 +254,9 @@ def create_harness(control, agent_key: str, role_arn: str) -> dict:
 
     Returns a dict with harnessId, arn, and name.
     """
-    suffix = uuid.uuid4().hex[:8]
-    harness_name = f"DataSDLC_{agent_key}_{suffix}"
+    suffix = uuid.uuid4().hex[:6]
+    safe_key = agent_key.replace("-", "_")
+    harness_name = f"dsdlc_{safe_key}_{suffix}"
 
     print(f"\n  Creating harness: {harness_name}")
     resp = control.create_harness(

@@ -12,12 +12,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agents.tools.definitions import get_tools_for_agent
+from agents.tools.definitions import get_tools_for_agent, get_tools_for_agent_harness
 
 _MODEL_MAP = {
-    "claude-sonnet": "global.anthropic.claude-sonnet-4-6",
-    "claude-haiku": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "gpt-4o-mini": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "claude-opus": "us.anthropic.claude-opus-4-6-v1",
+    "claude-sonnet": "us.anthropic.claude-opus-4-6-v1",
+    "claude-haiku": "us.anthropic.claude-opus-4-6-v1",
+    "gpt-4o-mini": "us.anthropic.claude-opus-4-6-v1",
 }
 
 
@@ -163,6 +164,7 @@ def get_agent_config(agent_key: str) -> dict[str, Any] | None:
     return {
         **config,
         "tools": get_tools_for_agent(agent_key),
+        "harness_tools": get_tools_for_agent_harness(agent_key),
         "bedrock_model_id": _MODEL_MAP.get(config["model"], config["model"]),
     }
 

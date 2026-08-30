@@ -273,28 +273,56 @@ TOOL_DEFINITIONS = [
 ]
 
 
+_AGENT_TOOL_MAP = {
+    "regression-agent": [
+        "discover_repository", "read_file", "analyze_dependencies",
+        "analyze_impact", "select_tests", "execute_tests",
+    ],
+    "impact-analysis-agent": [
+        "discover_repository", "read_file", "analyze_dependencies",
+        "analyze_impact",
+    ],
+    "data-quality-agent": [
+        "discover_repository", "read_file", "analyze_dependencies",
+        "profile_data_assets",
+    ],
+    "data-model-composer": [
+        "discover_repository", "read_file", "profile_data_assets",
+    ],
+    "delivery-compliance-agent": [
+        "discover_repository", "read_file", "discover_delivery_process",
+        "validate_checklist", "assess_gate_readiness", "validate_evidence",
+    ],
+}
+
+
 def get_tools_for_agent(agent_key: str) -> list[dict]:
-    """Return the tool definitions relevant to a specific agent."""
-    agent_tool_map = {
-        "regression-agent": [
-            "discover_repository", "read_file", "analyze_dependencies",
-            "analyze_impact", "select_tests", "execute_tests",
-        ],
-        "impact-analysis-agent": [
-            "discover_repository", "read_file", "analyze_dependencies",
-            "analyze_impact",
-        ],
-        "data-quality-agent": [
-            "discover_repository", "read_file", "analyze_dependencies",
-            "profile_data_assets",
-        ],
-        "data-model-composer": [
-            "discover_repository", "read_file", "profile_data_assets",
-        ],
-        "delivery-compliance-agent": [
-            "discover_repository", "read_file", "discover_delivery_process",
-            "validate_checklist", "assess_gate_readiness", "validate_evidence",
-        ],
-    }
-    allowed_names = set(agent_tool_map.get(agent_key, []))
+    """Return the tool definitions relevant to a specific agent (Converse format)."""
+    allowed_names = set(_AGENT_TOOL_MAP.get(agent_key, []))
     return [t for t in TOOL_DEFINITIONS if t["toolSpec"]["name"] in allowed_names]
+
+
+def _to_inline_function(tool_spec_def: dict) -> dict:
+    """Convert a Converse toolSpec definition to Harness inline_function format."""
+    spec = tool_spec_def["toolSpec"]
+    schema = spec["inputSchema"]["json"]
+    return {
+        "type": "inline_function",
+        "name": spec["name"],
+        "config": {
+            "inlineFunction": {
+                "description": spec["description"],
+                "inputSchema": schema,
+            }
+        },
+    }
+
+
+def get_tools_for_agent_harness(agent_key: str) -> list[dict]:
+    """Return tool definitions in AgentCore Harness inline_function format."""
+    allowed_names = set(_AGENT_TOOL_MAP.get(agent_key, []))
+    return [
+        _to_inline_function(t)
+        for t in TOOL_DEFINITIONS
+        if t["toolSpec"]["name"] in allowed_names
+    ]

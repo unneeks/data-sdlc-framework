@@ -12,6 +12,7 @@ import json
 import logging
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from agents.harness_agents.registry import get_agent_config
@@ -27,6 +28,19 @@ from agents.skills.evidence_validation import validate_evidence
 logger = logging.getLogger(__name__)
 
 
+def _load_harness_config() -> dict:
+    """Load per-agent harness ARNs from agentcore_config.json."""
+    config_path = Path(__file__).resolve().parent.parent / "agentcore_config.json"
+    if config_path.exists():
+        data = json.loads(config_path.read_text())
+        return {
+            agent_key: info["harness_arn"]
+            for agent_key, info in data.get("harnesses", {}).items()
+            if info.get("status") == "READY"
+        }
+    return {}
+
+
 class AgentRunner:
     """Runs metamodel agents against a repository corpus."""
 
@@ -38,6 +52,11 @@ class AgentRunner:
         self.mode = mode
         self._context: dict[str, Any] = {}
         self._traces: list[dict] = []
+        self._harness_arns: dict[str, str] = _load_harness_config()
+
+    def reload_harness_config(self):
+        """Reload harness ARNs (call after running setup_agentcore.py)."""
+        self._harness_arns = _load_harness_config()
 
     def run_agent(self, agent_key: str, task_input: dict) -> dict[str, Any]:
         """Run a specific agent with the given task input.
@@ -96,43 +115,70 @@ class AgentRunner:
             return {"error": f"No demo implementation for {agent_key}"}
 
     def _run_harness(self, agent_key: str, config: dict, task_input: dict, trace: dict) -> dict:
-        """Run agent via AgentCore Harness with tool bridging."""
+        """Run agent via AgentCore Harness with tool bridging.
+
+        Uses the per-agent harness ARN from agentcore_config.json, passes
+        inline_function tools, and bridges tool_use calls back to local skills.
+        """
         import boto3
-        from harness.config import harness_config
 
-        client = boto3.client("bedrock-agentcore", region_name=harness_config.aws_region)
-
-        harness_arn = harness_config.agent_runtime_arn
+        harness_arn = self._harness_arns.get(agent_key)
         if not harness_arn:
-            logger.warning("No harness ARN configured, falling back to demo mode")
+            logger.warning("No harness ARN for %s, falling back to demo mode", agent_key)
             return self._run_demo(agent_key, config, task_input, trace)
+
+        region = "us-west-2"
+        client = boto3.client("bedrock-agentcore", region_name=region)
 
         session_id = trace["session_id"]
         prompt = self._build_prompt(agent_key, task_input)
+        harness_tools = config.get("harness_tools", [])
 
-        messages = [
-            {"role": "user", "content": [{"text": prompt}]},
-        ]
+        trace["harness_arn"] = harness_arn
+        trace["model"] = config["bedrock_model_id"]
+
+        invoke_kwargs = {
+            "harnessArn": harness_arn,
+            "runtimeSessionId": session_id,
+            "messages": [{"role": "user", "content": [{"text": prompt}]}],
+            "model": {"bedrockModelConfig": {"modelId": config["bedrock_model_id"]}},
+            "systemPrompt": [{"text": config["system_prompt"]}],
+        }
+        if harness_tools:
+            invoke_kwargs["tools"] = harness_tools
 
         for turn in range(20):
-            response = client.invoke_harness(
-                harnessArn=harness_arn,
-                runtimeSessionId=session_id,
-                messages=messages,
-                model={"bedrockModelConfig": {"modelId": config["bedrock_model_id"]}},
-                systemPrompt=[{"text": config["system_prompt"]}],
-                toolConfiguration={"tools": config["tools"]},
-            )
+            logger.info("Harness turn %d for %s (session=%s)", turn, agent_key, session_id)
+            response = client.invoke_harness(**invoke_kwargs)
 
             content_blocks, stop_reason = self._parse_stream(response)
             trace["steps"].append({"turn": turn, "stop_reason": stop_reason})
 
             if stop_reason == "end_turn":
-                text = " ".join(b.get("text", "") for b in content_blocks if b.get("type") == "text")
+                text = " ".join(
+                    b.get("text", "") for b in content_blocks if b.get("type") == "text"
+                )
+                if not text.strip():
+                    all_text = " ".join(b.get("text", "") for b in content_blocks if b.get("text"))
+                    if all_text.strip():
+                        text = all_text
+                logger.info("end_turn text length=%d, blocks=%d, block_types=%s",
+                            len(text), len(content_blocks),
+                            [b.get("type", "?") for b in content_blocks])
                 try:
-                    return json.loads(text)
+                    Path("/tmp/last_harness_response.txt").write_text(text)
+                except Exception:
+                    pass
+                try:
+                    parsed = json.loads(text)
                 except json.JSONDecodeError:
-                    return {"raw_response": text, "agent_key": agent_key}
+                    parsed = self._extract_json_from_text(text)
+                if parsed is not None and self._RESULT_KEYS & parsed.keys():
+                    return parsed
+                structured = self._structure_markdown_response(text, agent_key)
+                if structured:
+                    return structured
+                return {"raw_response": text, "agent_key": agent_key}
 
             if stop_reason == "tool_use":
                 assistant_content = []
@@ -140,7 +186,7 @@ class AgentRunner:
 
                 for block in content_blocks:
                     if block.get("type") == "toolUse":
-                        result_text = self._execute_tool(block["name"], block["input"])
+                        tool_result_text = self._execute_tool(block["name"], block["input"])
                         assistant_content.append({
                             "toolUse": {
                                 "toolUseId": block["toolUseId"],
@@ -151,7 +197,7 @@ class AgentRunner:
                         tool_results.append({
                             "toolResult": {
                                 "toolUseId": block["toolUseId"],
-                                "content": [{"text": result_text}],
+                                "content": [{"text": tool_result_text}],
                                 "status": "success",
                             }
                         })
@@ -162,12 +208,76 @@ class AgentRunner:
                     elif block.get("type") == "text" and block.get("text"):
                         assistant_content.append({"text": block["text"]})
 
-                messages = [
-                    {"role": "assistant", "content": assistant_content},
-                    {"role": "user", "content": tool_results},
-                ]
+                invoke_kwargs = {
+                    "harnessArn": harness_arn,
+                    "runtimeSessionId": session_id,
+                    "messages": [
+                        {"role": "assistant", "content": assistant_content},
+                        {"role": "user", "content": tool_results},
+                    ],
+                    "model": {"bedrockModelConfig": {"modelId": config["bedrock_model_id"]}},
+                }
+                if harness_tools:
+                    invoke_kwargs["tools"] = harness_tools
 
         return {"error": "Max turns exceeded", "agent_key": agent_key}
+
+    _RESULT_KEYS = {
+        "risk_level", "regulatory_impact", "affected_assets", "affected_pipelines",
+        "directly_affected", "transitively_affected", "confidence", "provenance",
+        "overall_status", "test_execution", "test_selection", "test_results",
+        "profiles", "quality_indicators", "entities", "entity_count",
+        "gate_assessment", "checklist_result", "delivery_process", "blockers",
+    }
+
+    @classmethod
+    def _extract_json_from_text(cls, text: str) -> dict | None:
+        """Extract the agent result JSON from text that may contain prose and embedded snippets."""
+        import re
+
+        for pattern in [
+            re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL),
+            re.compile(r"```\s*(\{.*?\})\s*```", re.DOTALL),
+        ]:
+            for match in pattern.finditer(text):
+                try:
+                    candidate = json.loads(match.group(1))
+                    if isinstance(candidate, dict) and cls._RESULT_KEYS & candidate.keys():
+                        return candidate
+                except json.JSONDecodeError:
+                    continue
+
+        depth = 0
+        start = -1
+        candidates = []
+        for i, ch in enumerate(text):
+            if ch == '{':
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    try:
+                        obj = json.loads(text[start:i + 1])
+                        if isinstance(obj, dict) and cls._RESULT_KEYS & obj.keys():
+                            candidates.append(obj)
+                    except json.JSONDecodeError:
+                        pass
+                    start = -1
+
+        if candidates:
+            candidates.sort(key=lambda c: len(cls._RESULT_KEYS & c.keys()), reverse=True)
+            return candidates[0]
+
+        brace_start = text.find("{")
+        brace_end = text.rfind("}")
+        if brace_start != -1 and brace_end > brace_start:
+            try:
+                return json.loads(text[brace_start:brace_end + 1])
+            except json.JSONDecodeError:
+                pass
+        return None
 
     def _build_prompt(self, agent_key: str, task_input: dict) -> str:
         parts = [f"Execute the {agent_key} workflow against repository: {self.repository_root}"]
@@ -227,6 +337,76 @@ class AgentRunner:
             return validate_evidence(tool_input["evidence"], tool_input.get("requirements"))
         else:
             return {"error": f"Unknown tool: {tool_name}"}
+
+    @staticmethod
+    def _structure_markdown_response(text: str, agent_key: str) -> dict | None:
+        """Extract structured fields from a rich markdown analysis response."""
+        import re
+        if not text or len(text) < 100:
+            return None
+
+        result: dict[str, Any] = {"agent_key": agent_key, "report": text}
+
+        risk_match = re.search(r"Risk Level[^\n]*?\*{0,2}(CRITICAL|HIGH|MEDIUM|LOW)", text, re.IGNORECASE)
+        if risk_match:
+            result["risk_level"] = risk_match.group(1).upper()
+
+        reg_match = re.search(r"Regulatory Impact[^\n]*?\*{0,2}(YES|NO|TRUE|FALSE)", text, re.IGNORECASE)
+        if reg_match:
+            val = reg_match.group(1).upper()
+            result["regulatory_impact"] = val in ("YES", "TRUE")
+
+        conf_match = re.search(r"Confidence[^\n]*?\*{0,2}(\d+)%", text)
+        if conf_match:
+            result["confidence"] = int(conf_match.group(1)) / 100
+
+        affected_files = re.findall(r"`([^`]+\.(?:py|sql|yml|yaml|json))`", text)
+        if affected_files:
+            unique = list(dict.fromkeys(affected_files))
+            result["directly_affected"] = unique[:20]
+            result["transitively_affected"] = unique[20:]
+            result["total_affected_count"] = len(unique)
+
+        assets = set()
+        for m in re.finditer(r"(?:table|model|asset|pipeline)[:\s]+`?([a-z_]+(?:\.[a-z_]+)?)`?", text, re.IGNORECASE):
+            assets.add(m.group(1))
+        result["affected_assets"] = list(assets)[:30]
+
+        pipelines = set()
+        for m in re.finditer(r"(?:pipeline|dag|job|ingestion)[:\s]+`?([a-z_]+(?:\.[a-z_]+)?)`?", text, re.IGNORECASE):
+            pipelines.add(m.group(1))
+        result["affected_pipelines"] = list(pipelines)[:10]
+
+        gate_match = re.search(r"Gate[^\n]*?(READY|BLOCKED|PASSED|FAILED)", text, re.IGNORECASE)
+        if gate_match:
+            result["gate_status"] = gate_match.group(1).upper()
+
+        status_match = re.search(r"Overall[^\n]*?(PASSED|FAILED|BLOCKED)", text, re.IGNORECASE)
+        if status_match:
+            result["overall_status"] = status_match.group(1).upper()
+
+        tests_passed = re.search(r"(\d+)\s*(?:tests?\s+)?passed", text, re.IGNORECASE)
+        tests_failed = re.search(r"(\d+)\s*(?:tests?\s+)?failed", text, re.IGNORECASE)
+        if tests_passed or tests_failed:
+            result["test_execution"] = {
+                "summary": {
+                    "passed": int(tests_passed.group(1)) if tests_passed else 0,
+                    "failed": int(tests_failed.group(1)) if tests_failed else 0,
+                },
+                "overall_status": "FAILED" if (tests_failed and int(tests_failed.group(1)) > 0) else "PASSED",
+            }
+
+        blockers = []
+        for m in re.finditer(r"(?:🔴|CRITICAL|BLOCKING)[:\s]+(.+?)(?:\n|$)", text):
+            blockers.append({"severity": "BLOCKING", "detail": m.group(1).strip()[:200]})
+        if blockers:
+            result["gate_assessment"] = {
+                "ready": False,
+                "blockers": blockers[:10],
+                "recommendation": "See full report for details",
+            }
+
+        return result
 
     def _get_discovered_files(self) -> list[dict]:
         if "discovered_files" not in self._context:
@@ -386,7 +566,8 @@ class AgentRunner:
         current_block: dict = {}
         stop_reason = ""
 
-        for event in response.get("stream", []):
+        stream = response.get("stream", response)
+        for event in stream:
             if "contentBlockStart" in event:
                 start = event["contentBlockStart"].get("start", {})
                 if "toolUse" in start:
@@ -407,6 +588,8 @@ class AgentRunner:
                     current_block.setdefault("input_json", "")
                     current_block["input_json"] += delta["toolUse"].get("input", "")
             elif "contentBlockStop" in event:
+                if not current_block.get("type"):
+                    current_block["type"] = "toolUse" if "input_json" in current_block else "text"
                 if current_block.get("type") == "toolUse":
                     try:
                         current_block["input"] = json.loads(current_block.get("input_json", "{}"))

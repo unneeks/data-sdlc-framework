@@ -57,6 +57,7 @@ class DiscoveryReport:
     relationships: list[DiscoveredRelationship] = field(default_factory=list)
     skipped: list[DiscoverySkip] = field(default_factory=list)
     failed: list[DiscoveryFailure] = field(default_factory=list)
+    deep_analysis: dict[str, Any] | None = None
 
     def summary(self) -> str:
         lines = [
@@ -68,10 +69,18 @@ class DiscoveryReport:
             f"  Skipped: {len(self.skipped)}",
             f"  Failed: {len(self.failed)}",
         ]
+        if self.deep_analysis:
+            da = self.deep_analysis
+            lines.append(f"  Architecture: {da.get('architecture_style', 'unknown')}")
+            lines.append(f"  Modules: {len(da.get('modules', []))}")
+            lines.append(f"  Responsibilities: {len(da.get('responsibilities', []))}")
+            lines.append(f"  Entry points: {len(da.get('entry_points', []))}")
+            sbom = da.get("sbom", {}).get("summary", {})
+            lines.append(f"  SBOM components: {sbom.get('total_components', 0)}")
         return "\n".join(lines)
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "project_id": self.project_id,
             "strategy": self.strategy,
             "skill": self.skill,
@@ -81,3 +90,6 @@ class DiscoveryReport:
             "skipped": [{"kind": s.kind, "detail": s.detail, "source": s.source} for s in self.skipped],
             "failed": [{"kind": f.kind, "detail": f.detail, "source": f.source} for f in self.failed],
         }
+        if self.deep_analysis:
+            result["deep_analysis"] = self.deep_analysis
+        return result

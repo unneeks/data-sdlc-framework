@@ -31,6 +31,7 @@ from discovery.result import (
 from discovery.strategy import DiscoveryConfig
 from discovery.tools.walk import walk_repository, SOURCE_KIND_ENTITY_TYPES
 from discovery.tools.read import read_file
+from discovery.tools.deep_walk import deep_walk_repository
 from discovery.tools.resolve import resolve_relationships
 from discovery.tools.ingest import ingest_entities, ingest_relationships
 
@@ -126,6 +127,12 @@ class ClaudeCodeStrategy:
             all_entities.extend(entities)
             all_rel_candidates.extend(rels)
 
+        # Deep walk for module structure, patterns, SBOM, responsibilities
+        deep_report = deep_walk_repository(
+            str(config.repository_root),
+            extra_exclude_dirs=list(config.extra_exclude_dirs),
+        )
+
         # Resolve + Ingest
         resolution = resolve_relationships(all_rel_candidates, all_entities)
         skipped.extend(
@@ -165,6 +172,7 @@ class ClaudeCodeStrategy:
             relationships=[DiscoveredRelationship(**r) for r in resolution["relationships"]],
             skipped=skipped,
             failed=failed,
+            deep_analysis=deep_report if "error" not in deep_report else None,
         )
 
     def _extract_structural(

@@ -2,7 +2,7 @@
 """Create (or update) the Discovery Agent harness in AgentCore.
 
 The Discovery Agent walks a codebase, extracts technical and delivery entities,
-and populates a knowledge graph. It uses 4 inline function tools that execute
+and populates a knowledge graph. It uses 5 inline function tools that execute
 locally while the Harness LLM (Opus 4.6) orchestrates the sequencing.
 
 Usage:
@@ -49,7 +49,11 @@ def _load_system_prompt() -> str:
         "1. walk_repository — Walk directory tree and classify files by type\n"
         "2. read_file — Read a file's content\n"
         "3. ingest_entities — Validate and ingest entities into the knowledge graph\n"
-        "4. ingest_relationships — Ingest relationships between entities\n\n"
+        "4. ingest_relationships — Ingest relationships between entities\n"
+        "5. deep_walk_repository — Deep analysis: module structure, code responsibilities, "
+        "execution/behavior patterns, SBOM, and architecture style inference. "
+        "Use this AFTER the basic walk to build a high-level abstraction of the codebase. "
+        "Returns modules, responsibilities, patterns, sbom, entry_points, and architecture_style.\n\n"
         f"Follow these instructions:\n\n{skill_text}"
     )
 
@@ -180,6 +184,36 @@ def _build_tools() -> list[dict]:
                 },
             }},
         },
+        {
+            "type": "inline_function",
+            "name": "deep_walk_repository",
+            "config": {"inlineFunction": {
+                "description": (
+                    "Deep analysis of a repository. Reads file content, parses ASTs, "
+                    "and produces: module structure (packages, classes, functions, imports), "
+                    "code responsibilities (grouped areas of concern), execution/behavior "
+                    "patterns (entry points, orchestration style, error handling, logging, "
+                    "API routes, testing patterns), SBOM (software bill of materials from "
+                    "all dependency manifests), and an inferred architecture style. "
+                    "Use AFTER walk_repository for a high-level codebase abstraction."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "repository_root": {
+                            "type": "string",
+                            "description": "Absolute path to the repository root",
+                        },
+                        "extra_exclude_dirs": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Additional directories to exclude",
+                        },
+                    },
+                    "required": ["repository_root"],
+                },
+            }},
+        },
     ]
 
 
@@ -253,7 +287,7 @@ def create_or_update(region: str = DEFAULT_REGION, role_arn: str = DEFAULT_ROLE_
         "region": region,
         "model": MODEL_ID,
         "status": status,
-        "tools": ["walk_repository", "read_file", "ingest_entities", "ingest_relationships"],
+        "tools": ["walk_repository", "read_file", "ingest_entities", "ingest_relationships", "deep_walk_repository"],
     }
 
     print(f"\n{'='*60}")
@@ -266,7 +300,8 @@ def create_or_update(region: str = DEFAULT_REGION, role_arn: str = DEFAULT_ROLE_
     print(f"  Region:  {region}")
     print(f"  Model:   {MODEL_ID}")
     print(f"  Status:  {status}")
-    print(f"  Tools:   walk_repository, read_file, ingest_entities, ingest_relationships")
+    print(f"  Tools:   walk_repository, read_file, ingest_entities, ingest_relationships,")
+    print(f"           deep_walk_repository")
     print(f"\nInvoke with:")
     print(f"  python -m discovery.invoke_harness /path/to/repo my-project-id")
     print(f"{'='*60}")

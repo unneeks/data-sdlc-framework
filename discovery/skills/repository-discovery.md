@@ -53,6 +53,20 @@ For each delivery file (markdown, docs, project plans):
    The system will resolve symbolic references (names) to actual entity IDs.
 2. Report completion.
 
+### Pass 5: Deep Analysis (Optional but Recommended)
+
+Call `deep_walk_repository` with the repository root. This produces:
+
+- **Module structure** — packages, classes, functions, internal imports, public API
+- **Code responsibilities** — grouped areas of concern (e.g., "Data Ingestion", "Orchestration")
+- **Execution patterns** — entry points (CLI, web, DAG), orchestration style, scheduling
+- **Behavior patterns** — error handling, logging, retry, API, testing, configuration
+- **SBOM** — software bill of materials from all dependency manifests
+- **Architecture style** — inferred overall architecture (data_pipeline, web_application, etc.)
+
+Use the deep analysis to enrich your entity descriptions and identify relationships
+you may have missed in the file-by-file extraction passes.
+
 ## Entity Naming Conventions
 
 - Use the natural name from source code (e.g., `stg_customers` not `staging customers model`)
