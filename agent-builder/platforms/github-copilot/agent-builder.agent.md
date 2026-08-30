@@ -31,6 +31,55 @@ Users invoke you with:
 @agent-builder Bootstrap Release Lead from delivery model
 ```
 
+## CLI Tools
+
+All deterministic operations are handled by the CLI at
+`agent_builder.platforms.github_copilot.cli`. Invoke via terminal:
+
+```bash
+# Step 2 — Locate delivery model
+python -m agent_builder.platforms.github_copilot.cli locate \
+  --model-root /path/to/model
+
+# Step 3 — Analyse activities (returns content for classification)
+python -m agent_builder.platforms.github_copilot.cli analyse \
+  --model-root /path/to/model \
+  --role "Data Engineer" \
+  --responsibility "automates data pipeline development"
+
+# Step 3.5 — Evaluate splitting
+python -m agent_builder.platforms.github_copilot.cli split \
+  --role "Data Engineer" \
+  --responsibility "automates data pipeline development" \
+  --classifications-file /tmp/classifications.json
+
+# Step 4 — Check skill catalogue
+python -m agent_builder.platforms.github_copilot.cli skills \
+  --proposed schema_validation,pipeline_orchestration
+
+# Steps 5-6 — Render design document and manifest
+python -m agent_builder.platforms.github_copilot.cli render \
+  --design-file /tmp/design.json
+
+# Full pipeline (non-interactive)
+python -m agent_builder.platforms.github_copilot.cli full \
+  --model-root /path/to/model \
+  --role "Data Engineer" \
+  --responsibility "automates data pipeline development" \
+  --classifications-file /tmp/classifications.json
+```
+
+## Skills Reference
+
+Detailed instructions for each step are in the `skills/` directory:
+
+| Step | Skill File | Purpose |
+|------|-----------|---------|
+| 3 | `skills/analyse_activities.md` | Read and classify delivery model activities |
+| 3.5 | `skills/evaluate_splitting.md` | 7-criteria agent splitting evaluation |
+| 4 | `skills/derive_skills.md` | Check catalogue, map responsibilities to skills |
+| 5-6 | `skills/render_design.md` | Generate 13-section design doc + YAML manifest |
+
 ## Step-by-Step Process
 
 ### STEP 1 — Parse the Request
@@ -44,98 +93,38 @@ Generate `role_id`: `Data Engineer` → `data_engineer`
 
 ### STEP 2 — Locate the Delivery Model
 
-Search the repository:
-```terminal
-find . -path "*/delivery_model_pages_linked/*.md" -o -name "0.0_Delivery_Model*" | head -20
-```
-
-If not found, check common locations:
-```terminal
-ls docs/knowledge-base/ 2>/dev/null
-ls docs/delivery-model/ 2>/dev/null
-```
-
-If still not found, ask the user for the path.
+Run the `locate` CLI command. If not found, ask the user for the path.
 
 ### STEP 3 — Analyse Activities
 
-For each `.md` file in the delivery model directory:
+Run the `analyse` CLI command to read all activity files. Then classify each
+activity using the returned content:
+- **OWNS** — agent is primary responsible
+- **CONTRIBUTES** — participant but not owner
+- **CONSUMES** — receives outputs only
+- **OUT_OF_SCOPE** — no involvement
 
-1. Read the file
-2. Classify involvement:
-   - **OWNS** — agent is primary responsible
-   - **CONTRIBUTES** — participant but not owner
-   - **CONSUMES** — receives outputs only
-   - **OUT_OF_SCOPE** — no involvement
-
-Present classification table:
-```markdown
-| Activity ID | Activity Name | Classification | Rationale |
-|---|---|---|---|
-| 3.2 | Design Data Solution | OWNS | Data Engineer responsible |
-```
+Save classifications to a JSON file for the next step.
 
 ### STEP 3.5 — Evaluate Splitting
 
-Run the Python evaluator:
-```terminal
-cd <repo_root> && python -c "
-import sys; sys.path.insert(0, '.')
-from agent_builder.core.splitter import evaluate_splitting
-from agent_builder.core.models import AgentRole, ActivityClassification, InvolvementCode
-
-role = AgentRole('ROLE_NAME', 'PRIMARY_RESP')
-classifications = [
-    ActivityClassification('ID', 'NAME', InvolvementCode.OWNS, 'RATIONALE'),
-    # ... add all classifications
-]
-result = evaluate_splitting(role, classifications)
-print(f'Decision: {result.decision.value}')
-print(f'Rationale: {result.rationale}')
-print(f'Score: {result.split_score} split / {result.keep_score} keep')
-for c in result.criteria:
-    print(f'  {c.name}: {c.recommendation} — {c.rationale}')
-"
-```
-
+Run the `split` CLI command with the classifications file.
 If SPLIT recommended → ask user to confirm, then restart for each sub-agent.
+
+See `skills/evaluate_splitting.md` for the 7 criteria.
 
 ### STEP 4 — Derive Skills
 
-Check existing skills:
-```terminal
-cat agent-builder/agent-skills/README.md 2>/dev/null || echo "No skill catalogue found"
-```
+Run the `skills` CLI command to check for duplicates.
+For each responsibility not covered, propose a new skill.
 
-For each responsibility, either reuse an existing skill or propose a new one.
+See `skills/derive_skills.md` for skill mapping rules.
 
 ### STEP 5 & 6 — Render Documents
 
-Use the Python renderer:
-```terminal
-python -c "
-import sys; sys.path.insert(0, '.')
-from agent_builder.core.models import AgentDesign, AgentRole, ActivityClassification, InvolvementCode, SkillMapping
-from agent_builder.core.renderer import render_design_document, render_agent_manifest
+Build a design JSON file from all collected data, then run the `render` command.
 
-role = AgentRole('ROLE_NAME', 'PRIMARY_RESP')
-design = AgentDesign(
-    role=role,
-    delivery_model_root='PATH',
-    classifications=[...],
-    responsibilities=[...],
-    # ... populate all fields
-)
-doc = render_design_document(design)
-manifest = render_agent_manifest(design)
-
-with open('agent-builder/agent-designs/ROLE_ID_Agent_Design.md', 'w') as f:
-    f.write(doc)
-with open('agent-builder/agent-designs/ROLE_ID_agent-template.yaml', 'w') as f:
-    f.write(manifest)
-print('Files written.')
-"
-```
+See `skills/render_design.md` for the full design JSON structure.
 
 ### STEP 7 — Confirm
 
