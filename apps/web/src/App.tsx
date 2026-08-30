@@ -15,6 +15,7 @@ import { ImpactAndRCAViewer } from './components/ImpactAndRCAViewer';
 import { DeliveryGateApproval } from './components/DeliveryGateApproval';
 import { CliIntegrationExplorer } from './components/CliIntegrationExplorer';
 import { OntologyExplorer } from './components/OntologyExplorer';
+import { WorkflowSimulation } from './components/WorkflowSimulation';
 
 import { fetchDeliveryTypes, fetchAgents, DeliveryType, Agent } from './services/api';
 
@@ -164,6 +165,7 @@ export default function App() {
                 )}
                 {activeTab === 'impact' && <ImpactAndRCAViewer />}
                 {activeTab === 'gate' && <DeliveryGateApproval />}
+                {activeTab === 'workflow' && <WorkflowSimulation />}
                 {activeTab === 'cli' && <CliIntegrationExplorer />}
                 {activeTab === 'ontology' && <OntologyExplorer />}
               </motion.div>

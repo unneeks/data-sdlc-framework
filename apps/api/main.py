@@ -24,6 +24,10 @@ from harness.config import harness_config
 from harness.orchestrator import Orchestrator
 from harness import store as harness_store
 
+from agents.runner import AgentRunner
+from agents.workflow import WorkflowRunner
+from agents.harness_agents.registry import list_agents as list_harness_agents, get_skill_metadata
+
 app = FastAPI(
     title="Agentic Data Engineering Platform API",
     description="Digital Engineering Twin & Continuous Delivery Platform API",
@@ -292,6 +296,134 @@ async def harness_client_callback(payload: dict):
     if not resolved:
         return JSONResponse(status_code=409, content={"error": "no loop is currently awaiting this step_id"})
     return {"step_id": step.id, "status": step.status}
+
+# --- AgentCore Harness Agent Runner & Workflow ---
+_test_data_root = str(root_dir / "test-data")
+_project_seed_path = root_dir / "test-data" / "atlas_project_seed.json"
+_test_scenarios_path = root_dir / "test-data" / "atlas_test_scenarios.json"
+
+_project_seed_data = {}
+if _project_seed_path.exists():
+    with open(_project_seed_path) as f:
+        _project_seed_data = json.load(f)
+
+_test_scenarios_data = {}
+if _test_scenarios_path.exists():
+    with open(_test_scenarios_path) as f:
+        _test_scenarios_data = json.load(f)
+
+agent_runner = AgentRunner(
+    repository_root=_test_data_root,
+    project_seed=_project_seed_data,
+    test_scenarios=_test_scenarios_data,
+    mode="DEMO",
+)
+
+_active_workflow: WorkflowRunner | None = None
+
+
+@app.get("/api/agents/harness")
+def get_harness_agents():
+    """List all metamodel agents with harness implementation status."""
+    return list_harness_agents()
+
+
+@app.get("/api/agents/skills")
+def get_skills():
+    """List all metamodel skill metadata."""
+    return get_skill_metadata()
+
+
+@app.post("/api/agents/run")
+def run_agent(payload: dict):
+    """Run a specific agent against the test-data corpus."""
+    agent_key = payload.get("agent_key", "")
+    task_input = payload.get("task_input", {})
+    result = agent_runner.run_agent(agent_key, task_input)
+    return result
+
+
+@app.post("/api/agents/context")
+def build_context():
+    """Build full digital twin context by scanning the corpus."""
+    ctx = agent_runner.build_context()
+    summary = {
+        "files_discovered": ctx.get("discovery", {}).get("summary", {}).get("total_files", 0),
+        "capabilities_detected": ctx.get("discovery", {}).get("capabilities_detected", []),
+        "dependency_nodes": ctx.get("dependencies", {}).get("summary", {}).get("total_nodes", 0),
+        "dependency_edges": ctx.get("dependencies", {}).get("summary", {}).get("total_edges", 0),
+        "profiles_count": len(ctx.get("profiles", {}).get("profiles", [])),
+        "delivery_phases": len(ctx.get("delivery_process", {}).get("phases", [])),
+    }
+    return {"summary": summary, "context": ctx}
+
+
+@app.get("/api/agents/traces")
+def get_agent_traces():
+    """Get execution traces from agent runs."""
+    return {"traces": agent_runner.get_traces()}
+
+
+@app.post("/api/workflow/initialize")
+def initialize_workflow(payload: dict):
+    """Initialize a workflow from a test scenario."""
+    global _active_workflow
+    scenario_id = payload.get("scenario_id", "ATLAS-CR-003")
+    _active_workflow = WorkflowRunner(agent_runner, scenario=_test_scenarios_data)
+    result = _active_workflow.initialize_from_scenario(scenario_id)
+    return result
+
+
+@app.post("/api/workflow/next")
+def workflow_next_step():
+    """Execute the next step in the active workflow."""
+    if _active_workflow is None:
+        return {"error": "No active workflow. Call /api/workflow/initialize first."}
+    return _active_workflow.next_step()
+
+
+@app.post("/api/workflow/run-all")
+def workflow_run_all():
+    """Run all remaining workflow steps autonomously."""
+    if _active_workflow is None:
+        return {"error": "No active workflow. Call /api/workflow/initialize first."}
+    return _active_workflow.run_all()
+
+
+@app.get("/api/workflow/state")
+def get_workflow_state():
+    """Get current workflow state."""
+    if _active_workflow is None:
+        return {"status": "NO_WORKFLOW", "steps": []}
+    return _active_workflow.get_state()
+
+
+@app.get("/api/workflow/step/{step_index}")
+def get_workflow_step_result(step_index: int):
+    """Get detailed result for a specific workflow step."""
+    if _active_workflow is None:
+        return {"error": "No active workflow"}
+    result = _active_workflow.get_step_result(step_index)
+    if result is None:
+        return {"error": f"Step {step_index} not found or not yet executed"}
+    return result
+
+
+@app.get("/api/scenarios")
+def get_test_scenarios():
+    """List available test scenarios."""
+    scenarios = _test_scenarios_data.get("scenarios", [])
+    return [
+        {
+            "id": s["id"],
+            "title": s["title"],
+            "prompt": s["prompt"],
+            "expected_classification": s["expected_classification"],
+            "risk_level": s.get("impact", {}).get("risk_level", "UNKNOWN"),
+        }
+        for s in scenarios
+    ]
+
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse

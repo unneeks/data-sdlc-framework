@@ -1,4 +1,4 @@
-import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench, Share2 } from 'lucide-react';
+import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench, Share2, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface SidebarProps {
@@ -29,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
       title: 'Project Workflow',
       tabs: [
         { id: 'twin', label: 'Digital Twin Explorer', icon: GitBranch },
+        { id: 'workflow', label: 'Agent Workflow', icon: Zap },
         { id: 'sdlc', label: 'Hero Demo (SDLC)', icon: Play },
         { id: 'impact', label: 'Impact & RCA', icon: RefreshCw },
         { id: 'gate', label: 'Gate & Approval', icon: ShieldCheck },

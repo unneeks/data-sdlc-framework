@@ -153,6 +153,119 @@ export async function classifyPrompt(prompt: string) {
   };
 }
 
+// --- AgentCore Harness Agent APIs ---
+
+export interface WorkflowState {
+  workflow_id: string;
+  status: string;
+  current_step: number;
+  total_steps: number;
+  steps: WorkflowStep[];
+  evidence_count: number;
+  created_at: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  agent_key: string;
+  phase: string;
+  status: string;
+  depends_on: string[];
+  started_at: string | null;
+  completed_at: string | null;
+  result_summary: Record<string, any> | null;
+}
+
+export interface Scenario {
+  id: string;
+  title: string;
+  prompt: string;
+  expected_classification: string;
+  risk_level: string;
+}
+
+export async function fetchScenarios(): Promise<Scenario[]> {
+  try {
+    const res = await fetch(`${API_BASE}/scenarios`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Using offline fallback for scenarios", e);
+  }
+  return [
+    { id: "ATLAS-CR-001", title: "Add PEP flag to customer accounts", prompt: "", expected_classification: "DATA_PRODUCT_AMENDMENT", risk_level: "HIGH" },
+    { id: "ATLAS-CR-003", title: "Fix timestamp precision drift", prompt: "", expected_classification: "DATA_PRODUCT_AMENDMENT", risk_level: "HIGH" },
+  ];
+}
+
+export async function fetchHarnessAgents(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/agents/harness`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Fallback for harness agents", e);
+  }
+  return [];
+}
+
+export async function fetchSkillMetadata(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/agents/skills`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Fallback for skills", e);
+  }
+  return [];
+}
+
+export async function initializeWorkflow(scenarioId: string): Promise<WorkflowState> {
+  const res = await fetch(`${API_BASE}/workflow/initialize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario_id: scenarioId }),
+  });
+  return await res.json();
+}
+
+export async function workflowNextStep(): Promise<WorkflowState> {
+  const res = await fetch(`${API_BASE}/workflow/next`, { method: 'POST' });
+  return await res.json();
+}
+
+export async function workflowRunAll(): Promise<WorkflowState> {
+  const res = await fetch(`${API_BASE}/workflow/run-all`, { method: 'POST' });
+  return await res.json();
+}
+
+export async function getWorkflowState(): Promise<WorkflowState> {
+  const res = await fetch(`${API_BASE}/workflow/state`);
+  return await res.json();
+}
+
+export async function getWorkflowStepResult(stepIndex: number): Promise<any> {
+  const res = await fetch(`${API_BASE}/workflow/step/${stepIndex}`);
+  return await res.json();
+}
+
+export async function runAgent(agentKey: string, taskInput: Record<string, any>): Promise<any> {
+  const res = await fetch(`${API_BASE}/agents/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_key: agentKey, task_input: taskInput }),
+  });
+  return await res.json();
+}
+
+export async function buildContext(): Promise<any> {
+  const res = await fetch(`${API_BASE}/agents/context`, { method: 'POST' });
+  return await res.json();
+}
+
+export async function fetchAgentTraces(): Promise<any> {
+  const res = await fetch(`${API_BASE}/agents/traces`);
+  return await res.json();
+}
+
 export async function fetchImpactAnalysis(changeId: string = "CR-2026-8942") {
   try {
     const res = await fetch(`${API_BASE}/impact/${changeId}`);
