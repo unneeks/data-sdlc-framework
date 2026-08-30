@@ -93,11 +93,18 @@ def classify_file(relative_path: str) -> str | None:
 def walk_repository(
     repository_root: str,
     extra_exclude_dirs: list[str] | None = None,
+    *,
+    deep: bool = False,
 ) -> dict[str, Any]:
     """Walk a repository and return classified candidate files.
 
     This is the tool interface — returns a serializable dict suitable
     for use as an MCP/Lambda tool response.
+
+    When *deep* is True, also runs the deep code analyser which reads
+    file content, parses ASTs, and produces module structure,
+    responsibilities, execution patterns, and an SBOM.  The deep
+    analysis is appended under a ``"deep_analysis"`` key.
     """
     root = Path(repository_root)
     exclude = DEFAULT_EXCLUDE_DIRS | frozenset(extra_exclude_dirs or [])
@@ -123,7 +130,7 @@ def walk_repository(
     for c in candidates:
         by_kind[c.source_kind] = by_kind.get(c.source_kind, 0) + 1
 
-    return {
+    result: dict[str, Any] = {
         "repository_root": str(root),
         "total_candidates": len(candidates),
         "by_source_kind": by_kind,
@@ -136,3 +143,12 @@ def walk_repository(
             for c in candidates if c.source_kind in DELIVERY_SOURCE_KINDS
         ],
     }
+
+    if deep:
+        from discovery.tools.deep_walk import deep_walk_repository
+        result["deep_analysis"] = deep_walk_repository(
+            repository_root,
+            extra_exclude_dirs=list(extra_exclude_dirs or []),
+        )
+
+    return result
