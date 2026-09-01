@@ -28,7 +28,7 @@ import boto3
 
 HARNESS_NAME = "discovery_agent"
 DEFAULT_REGION = "us-west-2"
-DEFAULT_ROLE_ARN = "arn:aws:iam::553644760112:role/HarnessExecutionRole"
+DEFAULT_ROLE_ARN = "arn:aws:iam::981956186421:role/HarnessExecutionRole"
 MODEL_ID = "global.anthropic.claude-opus-4-6-v1"
 
 SKILLS_DIR = Path(__file__).resolve().parent.parent.parent / "discovery" / "skills"

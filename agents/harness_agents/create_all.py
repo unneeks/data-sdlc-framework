@@ -19,7 +19,7 @@ from agents.harness_agents.create_agent_builder import create_or_update as creat
 def main():
     parser = argparse.ArgumentParser(description="Create all AgentCore Harness agents")
     parser.add_argument("--region", default="us-west-2")
-    parser.add_argument("--role-arn", default="arn:aws:iam::553644760112:role/HarnessExecutionRole")
+    parser.add_argument("--role-arn", default="arn:aws:iam::981956186421:role/HarnessExecutionRole")
     args = parser.parse_args()
 
     results = {}

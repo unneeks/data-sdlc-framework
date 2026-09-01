@@ -28,7 +28,7 @@ from discovery.tools.read import read_file
 from discovery.tools.deep_walk import deep_walk_repository
 from discovery.tools.ingest import ingest_entities, ingest_relationships, get_graph_state
 
-HARNESS_ARN = "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/discovery_agent-7j9EL4p1Db"
+HARNESS_ARN = "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/discovery_agent-7j9EL4p1Db"
 REGION = "us-west-2"
 
 

@@ -181,6 +181,6 @@ def create_harness(execution_role_arn: str) -> dict:
 
 
 if __name__ == "__main__":
-    role_arn = sys.argv[1] if len(sys.argv) > 1 else "arn:aws:iam::553644760112:role/HarnessExecutionRole"
+    role_arn = sys.argv[1] if len(sys.argv) > 1 else "arn:aws:iam::981956186421:role/HarnessExecutionRole"
     result = create_harness(role_arn)
     print(json.dumps(result, indent=2))

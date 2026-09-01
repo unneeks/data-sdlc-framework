@@ -31,7 +31,7 @@ import boto3
 REGION = "us-west-2"
 DEFAULT_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 DEFAULT_REASONING_HARNESS = (
-    "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/code_reasoning-cdIPrL5T1l"
+    "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/code_reasoning-cdIPrL5T1l"
 )
 
 

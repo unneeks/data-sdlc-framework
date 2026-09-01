@@ -1,7 +1,7 @@
 {
-  "agent_name": "data_sdlc_framework_96560",
-  "runtime_id": "data_sdlc_framework_96560-4BNuH1DiKv",
-  "runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:runtime/data_sdlc_framework_96560-4BNuH1DiKv",
-  "endpoint_arn": "arn:aws:bedrock-agentcore:us-west-2:553644760112:runtime/data_sdlc_framework_96560-4BNuH1DiKv/runtime-endpoint/default",
+  "agent_name": "data_sdlc_framework_74729",
+  "runtime_id": "data_sdlc_framework_74729-dUnkQd8IYP",
+  "runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:runtime/data_sdlc_framework_74729-dUnkQd8IYP",
+  "endpoint_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:runtime/data_sdlc_framework_74729-dUnkQd8IYP/runtime-endpoint/default",
   "region": "us-west-2"
 }

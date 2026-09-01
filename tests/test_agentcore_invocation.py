@@ -43,7 +43,7 @@ def config():
     c = HarnessConfig()
     c.mode = SystemMode.REAL
     c.aws_region = "us-west-2"
-    c.agent_runtime_arn = "arn:aws:bedrock-agentcore:us-west-2:553644760112:runtime/test-runtime-id"
+    c.agent_runtime_arn = "arn:aws:bedrock-agentcore:us-west-2:981956186421:runtime/test-runtime-id"
     return c
 
 

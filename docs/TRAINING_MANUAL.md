@@ -893,7 +893,7 @@ uv run python -m agent_builder.platforms.agentcore_harness.invoke_builder \
   "Data Engineer" \
   "automates data pipeline development" \
   "test-data/docs" \
-  "arn:aws:bedrock-agentcore:us-west-2:553644760112:harness/agent_builder-Aa3Ai2hEop"
+  "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/agent_builder-Aa3Ai2hEop"
 ```
 
 
