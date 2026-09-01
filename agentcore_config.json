@@ -4,12 +4,19 @@
   "role_name": "HarnessExecutionRole",
   "role_arn": "arn:aws:iam::981956186421:role/HarnessExecutionRole",
   "model_id": "us.anthropic.claude-opus-4-6-v1",
+  "convention_source": "/home/participant/data-sdlc-framework/.agentcore",
   "harnesses": {
     "impact-analysis-agent": {
-      "harness_id": "dsdlc_impact_analysis_agent_0324dc-yXrHAfvcif",
-      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/dsdlc_impact_analysis_agent_0324dc-yXrHAfvcif",
-      "harness_name": "dsdlc_impact_analysis_agent_0324dc",
-      "status": "READY"
+      "harness_id": "conv_impact_analysis_agent_9991c0-Pg8DOsoO11",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/conv_impact_analysis_agent_9991c0-Pg8DOsoO11",
+      "harness_name": "conv_impact_analysis_agent_9991c0",
+      "status": "READY",
+      "model_id": "us.anthropic.claude-opus-4-6-v1",
+      "execution_model": "PLANNER_EXECUTOR",
+      "skills": [
+        "impact-scanning"
+      ],
+      "source": "convention"
     },
     "regression-agent": {
       "harness_id": "dsdlc_regression_agent_e56826-mHTIx9kBrq",
@@ -18,10 +25,16 @@
       "status": "READY"
     },
     "data-quality-agent": {
-      "harness_id": "dsdlc_data_quality_agent_c1b1f9-IToFys0ysm",
-      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/dsdlc_data_quality_agent_c1b1f9-IToFys0ysm",
-      "harness_name": "dsdlc_data_quality_agent_c1b1f9",
-      "status": "READY"
+      "harness_id": "conv_data_quality_agent_458efb-RRmD6XnFW3",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/conv_data_quality_agent_458efb-RRmD6XnFW3",
+      "harness_name": "conv_data_quality_agent_458efb",
+      "status": "READY",
+      "model_id": "us.anthropic.claude-opus-4-6-v1",
+      "execution_model": "ITERATIVE",
+      "skills": [
+        "data-profiling"
+      ],
+      "source": "convention"
     },
     "data-model-composer": {
       "harness_id": "dsdlc_data_model_composer_362700-li8pBfWcjL",
@@ -34,6 +47,56 @@
       "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/dsdlc_delivery_compliance_agent_f7be23-S4BLffdpKd",
       "harness_name": "dsdlc_delivery_compliance_agent_f7be23",
       "status": "READY"
+    },
+    "test-planner-agent": {
+      "harness_id": "conv_test_planner_agent_00a00c-mxJIIlCm0S",
+      "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:981956186421:harness/conv_test_planner_agent_00a00c-mxJIIlCm0S",
+      "harness_name": "conv_test_planner_agent_00a00c",
+      "status": "READY",
+      "model_id": "us.anthropic.claude-opus-4-6-v1",
+      "execution_model": "ITERATIVE",
+      "skills": [
+        "select_tests",
+        "generate_test_plan"
+      ],
+      "source": "convention"
     }
+  },
+  "skills_registry": {
+    "data-quality-agent/data-profiling": {
+      "skill_name": "data-profiling",
+      "handler_path": "/home/participant/data-sdlc-framework/.agentcore/skills/data-profiling/handler.py",
+      "status": "REGISTERED"
+    },
+    "test-planner-agent/generate_test_plan": {
+      "skill_name": "generate_test_plan",
+      "handler_path": "/home/participant/data-sdlc-framework/.agentcore/skills/generate_test_plan/handler.py",
+      "status": "REGISTERED"
+    },
+    "impact-analysis-agent/impact-scanning": {
+      "skill_name": "impact-scanning",
+      "handler_path": "/home/participant/data-sdlc-framework/.agentcore/skills/impact-scanning/handler.py",
+      "status": "REGISTERED"
+    }
+  },
+  "memories": {
+    "data-quality-agent": {
+      "memory_id": "conv-memory-data_quality_agent",
+      "status": "FAILED"
+    },
+    "impact-analysis-agent": {
+      "memory_id": "conv-memory-impact_analysis_agent",
+      "status": "FAILED"
+    },
+    "test-planner-agent": {
+      "memory_id": "conv-memory-test_planner_agent",
+      "status": "FAILED"
+    }
+  },
+  "knowledgebase": {
+    "bucket_name": "",
+    "s3_uri": "",
+    "files_uploaded": 0,
+    "status": "FAILED"
   }
 }

@@ -13,6 +13,9 @@ Slash commands control the session:
     /mode            Toggle DEMO / REAL
     /model           Show current model info
     /verbose         Toggle verbose logging
+    /create-agent    Create a new agent from .agentcore/ conventions
+    /conventions     List convention-based agents
+    /provision       Provision convention agents to AgentCore
     /clear           Clear screen
     /help            Show commands
     /quit            Exit
@@ -23,6 +26,9 @@ Direct invocation:
     python agent_cli.py skills                             # List skills
     python agent_cli.py run <agent-key> --change "..."     # One-shot run
     python agent_cli.py workflow --scenario ATLAS-CR-003   # Full workflow
+    python agent_cli.py create-agent                       # Convention wizard
+    python agent_cli.py conventions                        # List conventions
+    python agent_cli.py provision                          # Provision to AgentCore
 """
 from __future__ import annotations
 
@@ -321,21 +327,43 @@ def cmd_traces(runner: AgentRunner):
         print(f"  {DIM}{t['start_time']}{RESET} {CYAN}{t['agent_key']}{RESET} {sc}{t['status']}{RESET} {DIM}{t['mode']} | {len(t['steps'])} steps{RESET}")
 
 
+def cmd_create_agent():
+    from agents.conventions.creator import run_create_agent_wizard
+    return run_create_agent_wizard(root_dir)
+
+
+def cmd_conventions():
+    from agents.conventions.creator import run_list_conventions
+    run_list_conventions(root_dir)
+
+
+def cmd_provision():
+    from agents.conventions.creator import run_provision_all_wizard
+    return run_provision_all_wizard(root_dir)
+
+
 def cmd_help():
     print(f"""
   {BOLD}Slash Commands{RESET}
   {'─'*40}
-  {CYAN}/agents{RESET}     List available agents
-  {CYAN}/skills{RESET}     List metamodel skills
-  {CYAN}/select{RESET}     Pick a different agent
-  {CYAN}/workflow{RESET}   Run full SDLC workflow
-  {CYAN}/traces{RESET}     Show execution traces
-  {CYAN}/mode{RESET}       Toggle DEMO / REAL
-  {CYAN}/model{RESET}      Show current model & agent info
-  {CYAN}/verbose{RESET}    Toggle verbose logging
-  {CYAN}/clear{RESET}      Clear screen
-  {CYAN}/help{RESET}       Show this help
-  {CYAN}/quit{RESET}       Exit
+  {CYAN}/agents{RESET}         List available agents
+  {CYAN}/skills{RESET}         List metamodel skills
+  {CYAN}/select{RESET}         Pick a different agent
+  {CYAN}/workflow{RESET}       Run full SDLC workflow
+  {CYAN}/traces{RESET}         Show execution traces
+  {CYAN}/mode{RESET}           Toggle DEMO / REAL
+  {CYAN}/model{RESET}          Show current model & agent info
+  {CYAN}/verbose{RESET}        Toggle verbose logging
+
+  {BOLD}Convention Commands{RESET}
+  {'─'*40}
+  {CYAN}/create-agent{RESET}   Create agent from .agentcore/ conventions
+  {CYAN}/conventions{RESET}    List convention-based agents
+  {CYAN}/provision{RESET}      Provision all conventions to AgentCore
+
+  {CYAN}/clear{RESET}          Clear screen
+  {CYAN}/help{RESET}           Show this help
+  {CYAN}/quit{RESET}           Exit
 
   {BOLD}Everything else is a prompt{RESET} sent to the
   active agent. Just type and press Enter.
@@ -433,6 +461,20 @@ def interactive(mode: str, scenario_id: str):
                 logging.getLogger("agents.runner").setLevel(level)
                 print(f"\n  Verbose: {GREEN}ON{RESET}\n" if verbose else f"\n  Verbose: {DIM}OFF{RESET}\n")
 
+            elif cmd == "create-agent":
+                result = cmd_create_agent()
+                if result and result.get("agent_key"):
+                    agents_list_new = [{"key": k, "name": k} for k in AGENT_CONFIGS.keys()]
+                    conv_key = result["agent_key"]
+                    if not any(a["key"] == conv_key for a in agents_list_new):
+                        print(f"  {DIM}Tip: Use /conventions to see your new agent.{RESET}")
+
+            elif cmd in ("conventions", "conv"):
+                cmd_conventions()
+
+            elif cmd == "provision":
+                cmd_provision()
+
             elif cmd == "clear":
                 os.system("clear")
 
@@ -453,7 +495,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Run without arguments for interactive mode. Any text is a prompt.",
     )
-    parser.add_argument("command", nargs="?", choices=["agents", "skills", "run", "workflow", "traces"],
+    parser.add_argument("command", nargs="?",
+                        choices=["agents", "skills", "run", "workflow", "traces",
+                                 "create-agent", "conventions", "provision"],
                         help="Command to execute (omit for interactive mode)")
     parser.add_argument("agent_key", nargs="?", help="Agent key (for 'run' command)")
     parser.add_argument("--mode", default=os.environ.get("AGENT_MODE", "DEMO"),
@@ -507,6 +551,12 @@ def main():
             mode=args.mode,
         )
         cmd_traces(runner)
+    elif args.command == "create-agent":
+        cmd_create_agent()
+    elif args.command == "conventions":
+        cmd_conventions()
+    elif args.command == "provision":
+        cmd_provision()
 
 
 if __name__ == "__main__":
