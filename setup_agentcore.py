@@ -39,14 +39,34 @@ REGION = os.environ.get("AWS_DEFAULT_REGION") or os.environ.get("AWS_REGION") or
 
 MODEL_ID = "us.anthropic.claude-opus-4-6-v1"
 
-# The five metamodel agents to provision
-AGENT_KEYS = [
-    "impact-analysis-agent",
-    "regression-agent",
-    "data-quality-agent",
-    "data-model-composer",
-    "delivery-compliance-agent",
-]
+
+def _discover_agent_keys() -> list[str]:
+    """Load agent keys from agent_configs.yaml + .agentcore/ conventions."""
+    import yaml as _yaml
+    keys = []
+    cfg_path = PROJECT_ROOT / "agents" / "agent_configs.yaml"
+    if cfg_path.exists():
+        data = _yaml.safe_load(cfg_path.read_text()) or {}
+        keys.extend(data.get("agents", {}).keys())
+    try:
+        from agents.conventions.parser import discover_conventions
+        conv = discover_conventions(PROJECT_ROOT)
+        if conv:
+            for agent in conv.agents:
+                if agent.key not in keys:
+                    keys.append(agent.key)
+    except ImportError:
+        pass
+    return keys or [
+        "impact-analysis-agent",
+        "regression-agent",
+        "data-quality-agent",
+        "data-model-composer",
+        "delivery-compliance-agent",
+    ]
+
+
+AGENT_KEYS = _discover_agent_keys()
 
 # Harness polling
 POLL_INTERVAL = 5       # seconds between status checks
@@ -302,14 +322,40 @@ def setup():
     print("\n--- Step 2: Create Harnesses ---")
     control = boto3.client("bedrock-agentcore-control", region_name=REGION)
 
+    existing_config = {}
+    if CONFIG_FILE.exists():
+        existing_config = json.loads(CONFIG_FILE.read_text())
+    existing_harnesses = existing_config.get("harnesses", {})
+
     harnesses = []
     for agent_key in AGENT_KEYS:
+        existing = existing_harnesses.get(agent_key, {})
+        if existing.get("harness_id") and existing.get("status") == "READY":
+            print(f"\n  WARNING: Harness for '{agent_key}' already exists (READY)")
+            print(f"    Harness ID:  {existing['harness_id']}")
+            print(f"    Harness ARN: {existing.get('harness_arn', 'N/A')}")
+            answer = input("    Recreate or skip? [r/S]: ").strip().lower()
+            if answer != "r":
+                print(f"    Skipping {agent_key}")
+                harnesses.append({
+                    "harnessId": existing["harness_id"],
+                    "arn": existing.get("harness_arn", ""),
+                    "name": existing.get("harness_name", ""),
+                    "agent_key": agent_key,
+                    "status": "EXISTING",
+                })
+                continue
+            print(f"    Recreating {agent_key}...")
+
         info = create_harness(control, agent_key, role_arn)
         harnesses.append(info)
 
     # Step 3: Wait for all to become READY
     print("\n--- Step 3: Wait for Harnesses to become READY ---")
     for info in harnesses:
+        if info.get("status") == "EXISTING":
+            print(f"\n  {info['agent_key']}: already READY (skipped)")
+            continue
         print(f"\n  Polling: {info['agent_key']} ({info['harnessId']})")
         try:
             poll_harness_status(control, info["harnessId"])
