@@ -283,6 +283,107 @@ export async function fetchAgentTraces(): Promise<any> {
   return await res.json();
 }
 
+// --- SDLC Demo Orchestrator APIs ---
+
+export interface SDLCDocument {
+  id: string;
+  title: string;
+  status: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SDLCEvent {
+  event: string;
+  condition: string;
+  target: string;
+  description: string;
+}
+
+export interface SDLCStatus {
+  orchestrator_id: string;
+  current_state: string;
+  state_description: string;
+  is_terminal: boolean;
+  documents: Record<string, SDLCDocument>;
+  artifacts: Record<string, any>;
+  history: Array<{
+    timestamp: string;
+    from_state: string;
+    event: string;
+    to_state: string;
+    action: string;
+    payload?: Record<string, any>;
+    agent_key?: string;
+    agent_result_summary?: Record<string, any>;
+  }>;
+  available_events: SDLCEvent[];
+  created_at: string;
+  agent_result?: any;
+  error?: string;
+}
+
+export async function sdlcDemoInitialize(): Promise<SDLCStatus> {
+  const res = await fetch(`${API_BASE}/sdlc-demo/initialize`, { method: 'POST' });
+  return await res.json();
+}
+
+export async function sdlcDemoStatus(): Promise<SDLCStatus> {
+  try {
+    const res = await fetch(`${API_BASE}/sdlc-demo/status`);
+    return await res.json();
+  } catch {
+    return {
+      orchestrator_id: '', current_state: 'INIT', state_description: '',
+      is_terminal: false, documents: {}, artifacts: {}, history: [],
+      available_events: [], created_at: '', error: 'Not initialized',
+    };
+  }
+}
+
+export async function sdlcDemoApprove(
+  documentId: string,
+  onProgress?: (status: SDLCStatus) => void,
+): Promise<SDLCStatus> {
+  const res = await fetch(`${API_BASE}/sdlc-demo/approve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document_id: documentId }),
+  });
+  const { task_id, error } = await res.json();
+  if (error) throw new Error(error);
+  // Poll for completion
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+    const pollRes = await fetch(`${API_BASE}/workflow/poll/${task_id}`);
+    const data = await pollRes.json();
+    if (data.status === 'RUNNING') {
+      if (onProgress) {
+        const status = await sdlcDemoStatus();
+        onProgress(status);
+      }
+      continue;
+    }
+    // Task done — fetch fresh status
+    return await sdlcDemoStatus();
+  }
+}
+
+export async function sdlcDemoDocument(docId: string): Promise<SDLCDocument> {
+  const res = await fetch(`${API_BASE}/sdlc-demo/document/${docId}`);
+  return await res.json();
+}
+
+export async function sdlcDemoArtifact(artifactKey: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/sdlc-demo/artifact/${artifactKey}`);
+  return await res.json();
+}
+
+export async function sdlcDemoReset(): Promise<void> {
+  await fetch(`${API_BASE}/sdlc-demo/reset`, { method: 'POST' });
+}
+
 export async function fetchImpactAnalysis(changeId: string = "CR-2026-8942") {
   try {
     const res = await fetch(`${API_BASE}/impact/${changeId}`);

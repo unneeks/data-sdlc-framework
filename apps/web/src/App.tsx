@@ -16,6 +16,7 @@ import { DeliveryGateApproval } from './components/DeliveryGateApproval';
 import { CliIntegrationExplorer } from './components/CliIntegrationExplorer';
 import { OntologyExplorer } from './components/OntologyExplorer';
 import { WorkflowSimulation } from './components/WorkflowSimulation';
+import { SDLCDemoWorkflow } from './components/SDLCDemoWorkflow';
 
 import { fetchDeliveryTypes, fetchAgents, DeliveryType, Agent } from './services/api';
 
@@ -175,6 +176,7 @@ export default function App() {
                 {activeTab === 'workflow' && <WorkflowSimulation />}
                 {activeTab === 'cli' && <CliIntegrationExplorer />}
                 {activeTab === 'ontology' && <OntologyExplorer />}
+                {activeTab === 'sdlc_demo' && <SDLCDemoWorkflow />}
               </motion.div>
             </AnimatePresence>
           </div>
