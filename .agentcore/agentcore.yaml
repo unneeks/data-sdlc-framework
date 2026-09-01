@@ -1,0 +1,11 @@
+version: "1.0"
+project:
+  name: data-sdlc-framework
+  description: Agentic Data Engineering Digital Twin and Continuous Delivery Platform
+defaults:
+  model: claude-sonnet
+  region: us-west-2
+  execution_model: PLANNER_EXECUTOR
+knowledgebase:
+  type: s3
+  shared: true
