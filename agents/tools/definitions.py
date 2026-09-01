@@ -273,33 +273,33 @@ TOOL_DEFINITIONS = [
 ]
 
 
-_AGENT_TOOL_MAP = {
-    "regression-agent": [
-        "discover_repository", "read_file", "analyze_dependencies",
-        "analyze_impact", "select_tests", "execute_tests",
-    ],
-    "impact-analysis-agent": [
-        "discover_repository", "read_file", "analyze_dependencies",
-        "analyze_impact",
-    ],
-    "data-quality-agent": [
-        "discover_repository", "read_file", "analyze_dependencies",
-        "profile_data_assets",
-    ],
-    "data-model-composer": [
-        "discover_repository", "read_file", "profile_data_assets",
-    ],
-    "delivery-compliance-agent": [
-        "discover_repository", "read_file", "discover_delivery_process",
-        "validate_checklist", "assess_gate_readiness", "validate_evidence",
-    ],
-}
+def _load_agent_tool_map() -> dict[str, list[str]]:
+    """Load agent→tool mappings from agent_configs.yaml, falling back to defaults."""
+    import yaml as _yaml
+    from pathlib import Path as _Path
+    cfg_path = _Path(__file__).resolve().parent.parent / "agent_configs.yaml"
+    if cfg_path.exists():
+        data = _yaml.safe_load(cfg_path.read_text()) or {}
+        return {
+            key: agent.get("tools", [])
+            for key, agent in data.get("agents", {}).items()
+        }
+    return {}
+
+
+_AGENT_TOOL_MAP: dict[str, list[str]] = _load_agent_tool_map()
 
 
 def get_tools_for_agent(agent_key: str) -> list[dict]:
     """Return the tool definitions relevant to a specific agent (Converse format)."""
     allowed_names = set(_AGENT_TOOL_MAP.get(agent_key, []))
     return [t for t in TOOL_DEFINITIONS if t["toolSpec"]["name"] in allowed_names]
+
+
+def get_tools_by_names(tool_names: list[str]) -> list[dict]:
+    """Return tool definitions for an explicit list of tool names (Converse format)."""
+    name_set = set(tool_names)
+    return [t for t in TOOL_DEFINITIONS if t["toolSpec"]["name"] in name_set]
 
 
 def _to_inline_function(tool_spec_def: dict) -> dict:

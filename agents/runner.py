@@ -1,36 +1,88 @@
-"""Harness Runner — executes agents in both REAL (AgentCore) and DEMO (local) modes.
+"""Generic Agent Runner — executes any agent via YAML-driven configuration.
 
-In REAL mode: creates/reuses an AgentCore Harness, invokes it with the agent's
-system prompt and tools, and bridges tool calls to local skill implementations.
+All agent-specific logic is externalised to:
+    agents/agent_configs.yaml  — agent definitions, demo chains, result keys
+    agents/tool_registry.yaml  — tool-to-skill mapping and argument resolution
 
-In DEMO mode: runs the agent's skill chain directly (deterministic, no LLM),
-producing the same structured output format.
+In REAL mode: invokes the AgentCore Harness with tool bridging.
+In DEMO mode: executes the agent's demo_chain from config (no LLM required).
+
+New agents (including .agentcore/ convention agents) work without code changes —
+add a YAML entry or an .agentcore/ instruction file.
 """
 from __future__ import annotations
 
+import importlib
 import json
 import logging
+import re
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
-from agents.harness_agents.registry import get_agent_config
-from agents.skills.repository_discovery import discover_repository, read_file
-from agents.skills.dependency_analysis import analyze_dependencies
-from agents.skills.impact_analysis import analyze_impact
-from agents.skills.test_selection import select_tests
-from agents.skills.test_execution import execute_tests
-from agents.skills.data_profiling import profile_data_assets
-from agents.skills.delivery_process import discover_delivery_process, validate_checklist, assess_gate_readiness
-from agents.skills.evidence_validation import validate_evidence
+import yaml
 
 logger = logging.getLogger(__name__)
 
+_AGENTS_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _AGENTS_DIR.parent
+AGENTCORE_DIR = ".agentcore"
 
-def _load_harness_config() -> dict:
-    """Load per-agent harness ARNs from agentcore_config.json."""
-    config_path = Path(__file__).resolve().parent.parent / "agentcore_config.json"
+
+# ── Config loading ─────────────────────────────────────────
+
+def _load_yaml(path: Path) -> dict:
+    if path.exists():
+        return yaml.safe_load(path.read_text()) or {}
+    return {}
+
+
+def _load_tool_registry() -> dict:
+    return _load_yaml(_AGENTS_DIR / "tool_registry.yaml").get("tools", {})
+
+
+def _load_agent_configs() -> dict:
+    data = _load_yaml(_AGENTS_DIR / "agent_configs.yaml")
+    return data.get("agents", {}), data.get("model_map", {}), set(data.get("result_keys", []))
+
+
+def _load_convention_agents() -> dict[str, dict]:
+    """Merge .agentcore/ convention agents into the config namespace."""
+    try:
+        from agents.conventions.parser import discover_conventions
+    except ImportError:
+        return {}
+
+    conv = discover_conventions(_PROJECT_ROOT)
+    if not conv:
+        return {}
+
+    merged = {}
+    for agent in conv.agents:
+        tool_names = []
+        for skill_name in agent.skills_used:
+            skill = conv.skills.get(skill_name)
+            if skill:
+                tool_names.extend(skill.required_tools)
+            else:
+                tool_names.append(skill_name)
+        tool_names = list(dict.fromkeys(tool_names))
+
+        merged[agent.key] = {
+            "system_prompt": agent.system_prompt,
+            "user_prompt": agent.user_prompt,
+            "model": agent.model,
+            "execution_model": agent.execution_model,
+            "tools": tool_names,
+            "source": "convention",
+            "source_path": agent.source_path,
+        }
+    return merged
+
+
+def _load_harness_config() -> dict[str, str]:
+    config_path = _PROJECT_ROOT / "agentcore_config.json"
     if config_path.exists():
         data = json.loads(config_path.read_text())
         return {
@@ -41,8 +93,116 @@ def _load_harness_config() -> dict:
     return {}
 
 
+# ── Argument resolution ────────────────────────────────────
+
+def _resolve_arg(spec: dict, tool_input: dict, task_input: dict, context: dict, cache: dict) -> Any:
+    """Resolve a single argument using the spec from tool_registry.yaml."""
+    source = spec.get("source", "input")
+    default = spec.get("default")
+
+    if source == "input":
+        return tool_input.get(spec.get("key", spec.get("input_key", "")), default)
+
+    if source == "context":
+        return context.get(spec.get("key", ""), default)
+
+    if source == "cache":
+        return _deep_get(cache, spec.get("cache_key", ""), default)
+
+    if source == "input_or_context":
+        key = spec.get("key", "")
+        return tool_input.get(key, context.get(key, default))
+
+    if source == "input_or_cache":
+        input_key = spec.get("input_key", spec.get("key", ""))
+        val = tool_input.get(input_key)
+        if val is not None:
+            return val
+        return _deep_get(cache, spec.get("cache_key", ""), default)
+
+    if source == "input_or_task":
+        key = spec.get("key", "")
+        val = tool_input.get(key)
+        if val is not None:
+            return val
+        return task_input.get(key, default)
+
+    return default
+
+
+def _deep_get(d: dict, dotted_key: str, default: Any = None) -> Any:
+    """Get a value from a nested dict using dot-separated keys."""
+    keys = dotted_key.split(".")
+    current = d
+    for k in keys:
+        if isinstance(current, dict) and k in current:
+            current = current[k]
+        else:
+            return default
+    return current
+
+
+def _format_template(template: str, result: dict) -> str:
+    """Simple {key} and {key.subkey} template formatting against a result dict."""
+    def replacer(m):
+        path = m.group(1)
+        val = _deep_get(result, path, "?")
+        if isinstance(val, float):
+            return f"{val:.0%}"
+        return str(val)
+    try:
+        return re.sub(r"\{([a-zA-Z_.]+)\}", replacer, template)
+    except Exception:
+        return template
+
+
+# ── Dynamic tool import ────────────────────────────────────
+
+_IMPORT_CACHE: dict[str, Any] = {}
+
+
+def _import_function(module_path: str, function_name: str):
+    cache_key = f"{module_path}.{function_name}"
+    if cache_key not in _IMPORT_CACHE:
+        mod = importlib.import_module(module_path)
+        _IMPORT_CACHE[cache_key] = getattr(mod, function_name)
+    return _IMPORT_CACHE[cache_key]
+
+
+# ── Generic tool definitions (Converse + Harness formats) ──
+
+def _build_tool_definitions(tool_names: list[str], registry: dict) -> list[dict]:
+    """Build Converse-format tool definitions from the registry."""
+    from agents.tools.definitions import TOOL_DEFINITIONS
+    name_set = set(tool_names)
+    return [t for t in TOOL_DEFINITIONS if t["toolSpec"]["name"] in name_set]
+
+
+def _build_harness_tools(tool_names: list[str], registry: dict) -> list[dict]:
+    """Build Harness inline_function tool definitions from the registry."""
+    from agents.tools.definitions import TOOL_DEFINITIONS
+    name_set = set(tool_names)
+    harness_tools = []
+    for t in TOOL_DEFINITIONS:
+        spec = t["toolSpec"]
+        if spec["name"] in name_set:
+            harness_tools.append({
+                "type": "inline_function",
+                "name": spec["name"],
+                "config": {
+                    "inlineFunction": {
+                        "description": spec["description"],
+                        "inputSchema": spec["inputSchema"]["json"],
+                    },
+                },
+            })
+    return harness_tools
+
+
+# ── The generic runner ─────────────────────────────────────
+
 class AgentRunner:
-    """Runs metamodel agents against a repository corpus."""
+    """Runs any agent against a repository corpus, driven entirely by YAML config."""
 
     def __init__(self, repository_root: str, project_seed: dict | None = None,
                  test_scenarios: dict | None = None, mode: str = "DEMO",
@@ -56,35 +216,49 @@ class AgentRunner:
         self._traces: list[dict] = []
         self._harness_arns: dict[str, str] = _load_harness_config()
 
+        self._tool_registry = _load_tool_registry()
+        agents_cfg, self._model_map, self._result_keys = _load_agent_configs()
+        self._agent_configs = agents_cfg
+
+        convention_agents = _load_convention_agents()
+        for key, conv_cfg in convention_agents.items():
+            if key not in self._agent_configs:
+                self._agent_configs[key] = conv_cfg
+            else:
+                existing = self._agent_configs[key]
+                if conv_cfg.get("system_prompt"):
+                    existing["system_prompt"] = conv_cfg["system_prompt"]
+                if conv_cfg.get("user_prompt"):
+                    existing["user_prompt"] = conv_cfg["user_prompt"]
+                existing["source"] = "convention"
+                existing["source_path"] = conv_cfg.get("source_path", "")
+
     def _emit(self, event_type: str, **kwargs):
         if self.on_event:
             self.on_event(event_type, kwargs)
 
     def reload_harness_config(self):
-        """Reload harness ARNs (call after running setup_agentcore.py)."""
         self._harness_arns = _load_harness_config()
 
+    # ── Public interface ───────────────────────────────────
+
     def run_agent(self, agent_key: str, task_input: dict) -> dict[str, Any]:
-        """Run a specific agent with the given task input.
-
-        Args:
-            agent_key: metamodel agent key (e.g. "impact-analysis-agent")
-            task_input: task-specific input (e.g. change_description, affected_files)
-
-        Returns:
-            Structured result from the agent's skill chain.
-        """
         logger.info("╔══ run_agent CALLED | agent=%s | mode=%s | input_keys=%s",
                      agent_key, self.mode, list(task_input.keys()))
-        config = get_agent_config(agent_key)
+
+        config = self._resolve_agent_config(agent_key)
         if not config:
             logger.error("║ Unknown agent: %s", agent_key)
             return {"error": f"Unknown agent: {agent_key}"}
 
-        logger.info("║ Config loaded | model=%s | tools=%d | harness_tools=%d",
+        logger.info("║ Config loaded | model=%s | tools=%d | source=%s",
                      config.get("bedrock_model_id", "?"),
                      len(config.get("tools", [])),
-                     len(config.get("harness_tools", [])))
+                     config.get("source", "yaml"))
+
+        # Validate human prompt upfront so it appears in traces
+        human_prompt = task_input.get("human_prompt", "") or task_input.get("prompt", "")
+        prompt_validation = self._validate_human_prompt(human_prompt, agent_key, config)
 
         session_id = str(uuid.uuid4())
         trace = {
@@ -92,18 +266,24 @@ class AgentRunner:
             "session_id": session_id,
             "start_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "mode": self.mode,
+            "prompt_validation": {
+                "human_prompt_present": bool(human_prompt),
+                "valid": prompt_validation["valid"],
+                "warnings": prompt_validation["warnings"],
+                "rejected_reason": prompt_validation["rejected_reason"],
+            },
             "steps": [],
         }
-        logger.info("║ Session: %s", session_id)
+
+        if not prompt_validation["valid"]:
+            logger.warning("║ Human prompt REJECTED for %s: %s",
+                           agent_key, prompt_validation["rejected_reason"])
 
         start = time.monotonic()
         try:
             if self.mode == "REAL":
-                logger.info("║ Dispatching to _run_harness (REAL mode)")
-                logger.info("║ Available harness ARNs: %s", list(self._harness_arns.keys()))
                 result = self._run_harness(agent_key, config, task_input, trace)
             else:
-                logger.info("║ Dispatching to _run_demo (DEMO mode)")
                 result = self._run_demo(agent_key, config, task_input, trace)
 
             elapsed = time.monotonic() - start
@@ -111,8 +291,7 @@ class AgentRunner:
             trace["status"] = "COMPLETED"
             trace["result_summary"] = _summarize(result)
             self._traces.append(trace)
-            logger.info("╚══ run_agent COMPLETED | agent=%s | %.1fs | result_keys=%s",
-                         agent_key, elapsed, list(result.keys())[:10])
+            logger.info("╚══ run_agent COMPLETED | agent=%s | %.1fs", agent_key, elapsed)
             return result
 
         except Exception as e:
@@ -125,29 +304,191 @@ class AgentRunner:
                           agent_key, elapsed, type(e).__name__, e)
             return {"error": str(e), "agent_key": agent_key}
 
+    def get_traces(self) -> list[dict]:
+        return list(reversed(self._traces))
+
+    def build_context(self) -> dict[str, Any]:
+        self._ensure_cache("discovered_files")
+        self._ensure_cache("dependencies")
+        profiles = self._execute_tool_by_name(
+            "profile_data_assets", {}, {}, use_cache=True,
+        )
+        process = self._execute_tool_by_name(
+            "discover_delivery_process", {}, {}, use_cache=True,
+        )
+        return {
+            "discovery": self._context.get("discovered_files_result", {}),
+            "dependencies": self._context.get("dependencies", {}),
+            "profiles": profiles,
+            "delivery_process": process,
+            "project_seed": self.project_seed,
+        }
+
+    # ── Config resolution ──────────────────────────────────
+
+    def _resolve_agent_config(self, agent_key: str) -> dict | None:
+        cfg = self._agent_configs.get(agent_key)
+        if not cfg:
+            cfg = self._detect_convention_agent(agent_key)
+            if cfg:
+                self._agent_configs[agent_key] = cfg
+            else:
+                return None
+
+        if cfg.get("source") == "convention":
+            source_path = cfg.get("source_path", "")
+            if source_path:
+                self._reload_convention_instructions(agent_key, source_path, cfg)
+            logger.info("║ Using convention instructions from %s", source_path or ".agentcore/")
+
+        model_key = cfg.get("model", "claude-sonnet")
+        bedrock_model_id = self._model_map.get(model_key, model_key)
+        tool_names = cfg.get("tools", [])
+
+        return {
+            **cfg,
+            "bedrock_model_id": bedrock_model_id,
+            "tools": _build_tool_definitions(tool_names, self._tool_registry),
+            "harness_tools": _build_harness_tools(tool_names, self._tool_registry),
+            "tool_names": tool_names,
+        }
+
+    def _detect_convention_agent(self, agent_key: str) -> dict | None:
+        """Check if a convention file exists for this agent at runtime."""
+        instruction_file = _PROJECT_ROOT / AGENTCORE_DIR / f"{agent_key}.agent.instructions.md"
+        if not instruction_file.exists():
+            return None
+
+        try:
+            from agents.conventions.parser import parse_agent_instructions
+            agent = parse_agent_instructions(instruction_file)
+        except Exception as e:
+            logger.warning("Failed to parse convention file %s: %s", instruction_file, e)
+            return None
+
+        try:
+            from agents.conventions.parser import discover_conventions
+            conv = discover_conventions(_PROJECT_ROOT)
+            tool_names = []
+            if conv:
+                for skill_name in agent.skills_used:
+                    skill = conv.skills.get(skill_name)
+                    if skill:
+                        tool_names.extend(skill.required_tools)
+                    else:
+                        tool_names.append(skill_name)
+            tool_names = list(dict.fromkeys(tool_names))
+        except Exception:
+            tool_names = []
+
+        logger.info("║ Auto-detected convention agent: %s from %s", agent_key, instruction_file)
+        return {
+            "system_prompt": agent.system_prompt,
+            "user_prompt": agent.user_prompt,
+            "model": agent.model,
+            "execution_model": agent.execution_model,
+            "tools": tool_names,
+            "source": "convention",
+            "source_path": str(instruction_file),
+        }
+
+    def _reload_convention_instructions(self, agent_key: str, source_path: str, cfg: dict):
+        """Re-read the convention file to pick up live edits."""
+        p = Path(source_path)
+        if not p.exists():
+            return
+        try:
+            from agents.conventions.parser import parse_agent_instructions
+            agent = parse_agent_instructions(p)
+            cfg["system_prompt"] = agent.system_prompt
+            cfg["user_prompt"] = agent.user_prompt
+        except Exception as e:
+            logger.warning("Failed to reload convention file %s: %s", source_path, e)
+
+    def get_agent_config(self, agent_key: str) -> dict | None:
+        return self._resolve_agent_config(agent_key)
+
+    def list_agents(self) -> list[str]:
+        return sorted(self._agent_configs.keys())
+
+    # ── DEMO mode: generic skill chain executor ────────────
+
     def _run_demo(self, agent_key: str, config: dict, task_input: dict, trace: dict) -> dict:
-        """Run agent in demo mode — direct skill execution, no LLM."""
-        logger.info("  ├─ DEMO dispatch for %s", agent_key)
-        self._emit("thinking", text=f"Planning execution for {agent_key} in DEMO mode...")
-        if agent_key == "impact-analysis-agent":
-            return self._demo_impact_analysis(task_input, trace)
-        elif agent_key == "regression-agent":
-            return self._demo_regression(task_input, trace)
-        elif agent_key == "data-quality-agent":
-            return self._demo_data_quality(task_input, trace)
-        elif agent_key == "data-model-composer":
-            return self._demo_data_model(task_input, trace)
-        elif agent_key == "delivery-compliance-agent":
-            return self._demo_delivery_compliance(task_input, trace)
-        else:
-            return {"error": f"No demo implementation for {agent_key}"}
+        chain = config.get("demo_chain", [])
+        if not chain:
+            return {"error": f"No demo_chain configured for {agent_key}", "agent_key": agent_key}
+
+        demo_cache: dict[str, Any] = {}
+        final_result: dict[str, Any] = {"agent_key": agent_key}
+
+        for step in chain:
+            tool_name = step["tool"]
+
+            thinking = step.get("emit_thinking", "")
+            if thinking:
+                self._emit("thinking", text=thinking)
+
+            self._emit("tool_call", name=tool_name, input={})
+            trace["steps"].append({"skill": tool_name})
+
+            tool_result = self._execute_tool_by_name(tool_name, {}, task_input, use_cache=True)
+
+            cache_as = step.get("cache_as")
+            if cache_as:
+                demo_cache[cache_as] = tool_result
+                self._context[cache_as] = tool_result
+
+            store_field = step.get("store_field")
+            store_key = step.get("store_key")
+            if store_field and store_key:
+                if isinstance(tool_result, dict) and store_field in tool_result:
+                    self._context[store_key] = tool_result[store_field]
+
+            result_text = step.get("emit_result", "Done")
+            if isinstance(tool_result, dict):
+                result_text = _format_template(result_text, tool_result)
+            self._emit("tool_result", name=tool_name, result=result_text, latency=0.1)
+
+            if step.get("merge_result") and isinstance(tool_result, dict):
+                final_result.update(tool_result)
+
+        compose = config.get("demo_result_compose")
+        if compose:
+            for key, ref in compose.items():
+                if isinstance(ref, str) and ref.startswith("{cache."):
+                    cache_path = ref[7:-1]
+                    final_result[key] = _deep_get(demo_cache, cache_path, _deep_get(self._context, cache_path))
+                else:
+                    final_result[key] = ref
+
+        post = config.get("demo_post_process")
+        if post:
+            final_result = self._demo_post_process(post, final_result, demo_cache)
+
+        return final_result
+
+    def _demo_post_process(self, name: str, result: dict, cache: dict) -> dict:
+        """Pluggable post-processors for demo mode (kept minimal)."""
+        if name == "build_entity_model":
+            profiles = cache.get("profiles", {})
+            profile_list = profiles.get("profiles", []) if isinstance(profiles, dict) else profiles
+            entities = []
+            for p in (profile_list if isinstance(profile_list, list) else []):
+                entities.append({
+                    "name": p.get("asset_name", ""),
+                    "domain": p.get("domain", "Unknown"),
+                    "columns": p.get("columns", []),
+                    "source": p.get("source", ""),
+                    "provenance": "OBSERVED",
+                })
+            result["entities"] = entities
+            result["entity_count"] = len(entities)
+            result["profiles"] = profiles
+        return result
+
+    # ── REAL mode: AgentCore Harness ───────────────────────
 
     def _run_harness(self, agent_key: str, config: dict, task_input: dict, trace: dict) -> dict:
-        """Run agent via AgentCore Harness with tool bridging.
-
-        Uses the per-agent harness ARN from agentcore_config.json, passes
-        inline_function tools, and bridges tool_use calls back to local skills.
-        """
         import boto3
 
         harness_arn = self._harness_arns.get(agent_key)
@@ -158,26 +499,34 @@ class AgentRunner:
             )
 
         region = "us-west-2"
-        logger.info("  ├─ HARNESS init | arn=%s | region=%s", harness_arn, region)
         client = boto3.client("bedrock-agentcore", region_name=region)
 
         session_id = trace["session_id"]
-        prompt = self._build_prompt(agent_key, task_input)
-        harness_tools = config.get("harness_tools", [])
 
-        logger.info("  ├─ Prompt: %.200s", prompt)
-        logger.info("  ├─ Model: %s | Tools: %d | System prompt: %d chars",
-                     config["bedrock_model_id"], len(harness_tools), len(config["system_prompt"]))
+        # Layer 1: System prompt — convention instructions are the immutable identity
+        system_prompt = config.get("system_prompt", "")
+        if not system_prompt:
+            system_prompt = f"You are the {agent_key} agent."
+
+        # Layers 2+3: Convention user prompt + validated human prompt
+        prompt = self._build_prompt(agent_key, config, task_input)
+
+        harness_tools = config.get("harness_tools", [])
 
         trace["harness_arn"] = harness_arn
         trace["model"] = config["bedrock_model_id"]
+        trace["prompt_layers"] = {
+            "system_prompt_length": len(system_prompt),
+            "convention_user_prompt_length": len(config.get("user_prompt", "")),
+            "human_prompt_present": bool(task_input.get("human_prompt") or task_input.get("prompt")),
+        }
 
         invoke_kwargs = {
             "harnessArn": harness_arn,
             "runtimeSessionId": session_id,
             "messages": [{"role": "user", "content": [{"text": prompt}]}],
             "model": {"bedrockModelConfig": {"modelId": config["bedrock_model_id"]}},
-            "systemPrompt": [{"text": config["system_prompt"]}],
+            "systemPrompt": [{"text": system_prompt}],
         }
         if harness_tools:
             invoke_kwargs["tools"] = harness_tools
@@ -187,10 +536,8 @@ class AgentRunner:
             turn_start = time.monotonic()
             response = client.invoke_harness(**invoke_kwargs)
             turn_elapsed = time.monotonic() - turn_start
-            logger.info("  │  invoke_harness returned in %.1fs", turn_elapsed)
 
             content_blocks, stop_reason = self._parse_stream(response)
-            logger.info("  │  stop_reason=%s | content_blocks=%d", stop_reason, len(content_blocks))
 
             reasoning_texts = [b["text"] for b in content_blocks if b.get("type") == "text" and b.get("text", "").strip()]
             tool_calls_in_turn = [b for b in content_blocks if b.get("type") == "toolUse"]
@@ -205,9 +552,6 @@ class AgentRunner:
 
             for rt in reasoning_texts:
                 self._emit("thinking", text=rt)
-                for line in rt.split("\n")[:10]:
-                    if line.strip():
-                        logger.info("  │  💭 %s", line.strip()[:200])
 
             if stop_reason == "end_turn":
                 text = " ".join(reasoning_texts)
@@ -216,8 +560,6 @@ class AgentRunner:
                     all_text = " ".join(b.get("text", "") for b in content_blocks if b.get("text"))
                     if all_text.strip():
                         text = all_text
-                logger.info("  │  📝 FINAL RESPONSE | length=%d chars", len(text))
-                logger.info("  │  📝 Preview: %.500s", text[:500])
                 step_record["final_response_length"] = len(text)
                 trace["steps"].append(step_record)
                 try:
@@ -228,7 +570,7 @@ class AgentRunner:
                     parsed = json.loads(text)
                 except json.JSONDecodeError:
                     parsed = self._extract_json_from_text(text)
-                if parsed is not None and self._RESULT_KEYS & parsed.keys():
+                if parsed is not None and self._result_keys & parsed.keys():
                     return parsed
                 structured = self._structure_markdown_response(text, agent_key)
                 if structured:
@@ -245,17 +587,11 @@ class AgentRunner:
                 for block in content_blocks:
                     if block.get("type") == "toolUse":
                         self._emit("tool_call", name=block["name"], input=block.get("input", {}))
-                        logger.info("  │  ┌─ TOOL CALL: %s | input_keys=%s",
-                                     block["name"], list(block.get("input", {}).keys()))
-                        logger.info("  │  │  input: %.300s", json.dumps(block.get("input", {}))[:300])
                         tool_start = time.monotonic()
-                        tool_result_text = self._execute_tool(block["name"], block["input"])
+                        tool_result_text = self._execute_tool(block["name"], block["input"], task_input)
                         tool_elapsed = time.monotonic() - tool_start
                         self._emit("tool_result", name=block["name"],
                                    result=tool_result_text[:500], latency=round(tool_elapsed, 1))
-                        logger.info("  │  └─ TOOL DONE: %s | %.1fs | result_len=%d",
-                                     block["name"], tool_elapsed, len(tool_result_text))
-                        logger.info("  │     result preview: %.300s", tool_result_text[:300])
                         assistant_content.append({
                             "toolUse": {
                                 "toolUseId": block["toolUseId"],
@@ -272,8 +608,6 @@ class AgentRunner:
                         })
                         tool_executions.append({
                             "tool": block["name"],
-                            "input": block.get("input", {}),
-                            "result_preview": tool_result_text[:500],
                             "latency_s": round(tool_elapsed, 1),
                         })
                     elif block.get("type") == "text" and block.get("text"):
@@ -295,19 +629,208 @@ class AgentRunner:
 
         return {"error": "Max turns exceeded", "agent_key": agent_key}
 
-    _RESULT_KEYS = {
-        "risk_level", "regulatory_impact", "affected_assets", "affected_pipelines",
-        "directly_affected", "transitively_affected", "confidence", "provenance",
-        "overall_status", "test_execution", "test_selection", "test_results",
-        "profiles", "quality_indicators", "entities", "entity_count",
-        "gate_assessment", "checklist_result", "delivery_process", "blockers",
-    }
+    # ── Generic tool dispatch ──────────────────────────────
 
-    @classmethod
-    def _extract_json_from_text(cls, text: str) -> dict | None:
-        """Extract the agent result JSON from text that may contain prose and embedded snippets."""
-        import re
+    def _execute_tool(self, tool_name: str, tool_input: dict, task_input: dict | None = None) -> str:
+        result = self._execute_tool_by_name(tool_name, tool_input, task_input or {})
+        return json.dumps(result, default=str)
 
+    def _execute_tool_by_name(
+        self, tool_name: str, tool_input: dict, task_input: dict, use_cache: bool = False,
+    ) -> Any:
+        """Dispatch a tool call using the YAML tool registry."""
+        spec = self._tool_registry.get(tool_name)
+        if not spec:
+            return {"error": f"Unknown tool: {tool_name}"}
+
+        context = {
+            "repository_root": self.repository_root,
+            "project_seed": self.project_seed,
+            "test_scenarios": self.test_scenarios,
+        }
+
+        self._ensure_cache("discovered_files")
+        if tool_name in ("analyze_dependencies", "analyze_impact", "select_tests"):
+            self._ensure_cache("dependencies")
+
+        args_spec = spec.get("args", {})
+        resolved_args = {}
+        for arg_name, arg_spec in args_spec.items():
+            resolved_args[arg_name] = _resolve_arg(
+                arg_spec, tool_input, task_input, context, self._context,
+            )
+
+        fn = _import_function(spec["module"], spec["function"])
+        return fn(**resolved_args)
+
+    def _ensure_cache(self, key: str):
+        """Lazily populate cache entries that other tools depend on."""
+        if key == "discovered_files" and "discovered_files" not in self._context:
+            from agents.skills.repository_discovery import discover_repository
+            result = discover_repository(self.repository_root)
+            self._context["discovered_files"] = result.get("files", [])
+            self._context["discovered_files_result"] = result
+        elif key == "dependencies" and "dependencies" not in self._context:
+            self._ensure_cache("discovered_files")
+            from agents.skills.dependency_analysis import analyze_dependencies
+            self._context["dependencies"] = analyze_dependencies(
+                self.repository_root, self._context["discovered_files"],
+            )
+
+    # ── Prompt layering ──────────────────────────────────────
+    #
+    # Override order (highest → lowest priority for shaping the message):
+    #   Layer 1 — System prompt      (from convention .agent.instructions.md)
+    #   Layer 2 — Convention user prompt (from convention .agent.instructions.md)
+    #   Layer 3 — Human user prompt  (submitted via API task_input)
+    #
+    # The human prompt is validated before inclusion: it must not attempt
+    # to override the system prompt or change the agent's fundamental
+    # objective.
+
+    # Patterns that signal an attempt to override agent identity/objective
+    _PROMPT_OVERRIDE_PATTERNS = [
+        re.compile(r"ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions?", re.I),
+        re.compile(r"forget\s+(?:all\s+)?(?:your|previous|prior)\s+(?:instructions?|rules?|prompts?)", re.I),
+        re.compile(r"you\s+are\s+(?:now|no\s+longer)\s+", re.I),
+        re.compile(r"your\s+(?:new\s+)?(?:role|mission|objective|purpose)\s+is", re.I),
+        re.compile(r"disregard\s+(?:all\s+)?(?:previous|prior|system)", re.I),
+        re.compile(r"override\s+(?:the\s+)?(?:system|original)\s+prompt", re.I),
+        re.compile(r"act\s+as\s+(?:a\s+)?(?:different|new)\s+(?:agent|assistant|role)", re.I),
+        re.compile(r"do\s+not\s+follow\s+(?:your|the)\s+(?:system|original)\s+(?:prompt|instructions?)", re.I),
+        re.compile(r"pretend\s+(?:you\s+are|to\s+be)\s+", re.I),
+        re.compile(r"new\s+system\s*(?:prompt|instructions?)\s*:", re.I),
+    ]
+
+    # Keywords that, when present, signal the human is trying to redefine scope
+    _SCOPE_OVERRIDE_KEYWORDS = [
+        "system prompt", "system instructions", "meta-prompt", "jailbreak",
+        "prompt injection", "DAN", "developer mode",
+    ]
+
+    def _validate_human_prompt(self, human_text: str, agent_key: str, config: dict) -> dict:
+        """Validate the human-submitted prompt before applying.
+
+        Returns:
+            {
+                "valid": bool,
+                "sanitized": str,         # the text to use (may be original or stripped)
+                "warnings": list[str],    # non-blocking concerns
+                "rejected_reason": str,   # if valid=False, why it was rejected
+            }
+        """
+        if not human_text or not human_text.strip():
+            return {"valid": True, "sanitized": "", "warnings": [], "rejected_reason": ""}
+
+        warnings: list[str] = []
+        text = human_text.strip()
+
+        # Check for prompt-override patterns
+        for pattern in self._PROMPT_OVERRIDE_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                reason = f"Human prompt contains override pattern: '{match.group()}'"
+                logger.warning("║ REJECTED human prompt for %s: %s", agent_key, reason)
+                return {
+                    "valid": False,
+                    "sanitized": "",
+                    "warnings": [],
+                    "rejected_reason": reason,
+                }
+
+        # Check for scope-override keywords (case-insensitive)
+        text_lower = text.lower()
+        for keyword in self._SCOPE_OVERRIDE_KEYWORDS:
+            if keyword.lower() in text_lower:
+                reason = f"Human prompt references restricted concept: '{keyword}'"
+                logger.warning("║ REJECTED human prompt for %s: %s", agent_key, reason)
+                return {
+                    "valid": False,
+                    "sanitized": "",
+                    "warnings": [],
+                    "rejected_reason": reason,
+                }
+
+        # Check length — excessively long human prompts may be trying to
+        # overwhelm the convention instructions
+        system_prompt = config.get("system_prompt", "")
+        convention_user_prompt = config.get("user_prompt", "")
+        convention_length = len(system_prompt) + len(convention_user_prompt)
+        if convention_length > 0 and len(text) > convention_length * 3:
+            warnings.append(
+                f"Human prompt ({len(text)} chars) is significantly longer than "
+                f"convention instructions ({convention_length} chars) — may dilute agent focus"
+            )
+
+        # Check for embedded role/system markers that mimic prompt structure
+        if re.search(r"(?m)^##\s*System\s*Prompt", text, re.I):
+            return {
+                "valid": False,
+                "sanitized": "",
+                "warnings": [],
+                "rejected_reason": "Human prompt contains embedded system prompt section header",
+            }
+        if text.startswith("---") and "\n---" in text[3:]:
+            warnings.append("Human prompt contains YAML frontmatter-like markers — stripped")
+            _, text = text.split("---", 2)[0], text.split("---", 2)[-1].strip()
+
+        for w in warnings:
+            logger.info("║ Human prompt warning for %s: %s", agent_key, w)
+
+        return {"valid": True, "sanitized": text, "warnings": warnings, "rejected_reason": ""}
+
+    def _build_prompt(self, agent_key: str, config: dict, task_input: dict) -> str:
+        """Build the final user message applying the three-layer override order.
+
+        Layer 1 (system prompt) is handled separately in systemPrompt.
+        This method composes Layer 2 (convention user prompt) + Layer 3 (human input).
+        """
+        convention_user_prompt = config.get("user_prompt", "")
+
+        # Extract the human-submitted prompt from task_input
+        human_prompt = task_input.get("human_prompt", "") or task_input.get("prompt", "")
+
+        # Validate the human prompt before applying
+        human_validation = self._validate_human_prompt(human_prompt, agent_key, config)
+
+        parts: list[str] = []
+
+        # Layer 2: Convention user prompt (always applied when present)
+        if convention_user_prompt:
+            parts.append(convention_user_prompt)
+            parts.append(f"\nRepository: {self.repository_root}")
+        else:
+            parts.append(f"Execute the {agent_key} workflow against repository: {self.repository_root}")
+
+        # Structured task parameters (always included)
+        if task_input.get("change_description"):
+            parts.append(f"\nChange: {task_input['change_description']}")
+        if task_input.get("affected_files"):
+            parts.append(f"\nAffected files: {json.dumps(task_input['affected_files'])}")
+        if task_input.get("change_id"):
+            parts.append(f"\nChange ID: {task_input['change_id']}")
+        if task_input.get("gate_name"):
+            parts.append(f"\nGate: {task_input['gate_name']}")
+
+        # Layer 3: Human user prompt (validated — sandboxed in a clearly marked section)
+        if human_validation["valid"] and human_validation["sanitized"]:
+            parts.append("\n--- Additional context from user ---")
+            parts.append(human_validation["sanitized"])
+            parts.append("--- End of user context ---")
+            if human_validation["warnings"]:
+                self._emit("prompt_warning", warnings=human_validation["warnings"])
+        elif not human_validation["valid"]:
+            parts.append(
+                f"\n[Note: A user-submitted prompt was rejected because it attempted "
+                f"to modify agent behaviour. Reason: {human_validation['rejected_reason']}]"
+            )
+            self._emit("prompt_rejected", reason=human_validation["rejected_reason"])
+
+        return "\n".join(parts)
+
+    # ── Response parsing ───────────────────────────────────
+
+    def _extract_json_from_text(self, text: str) -> dict | None:
         for pattern in [
             re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL),
             re.compile(r"```\s*(\{.*?\})\s*```", re.DOTALL),
@@ -315,7 +838,7 @@ class AgentRunner:
             for match in pattern.finditer(text):
                 try:
                     candidate = json.loads(match.group(1))
-                    if isinstance(candidate, dict) and cls._RESULT_KEYS & candidate.keys():
+                    if isinstance(candidate, dict) and self._result_keys & candidate.keys():
                         return candidate
                 except json.JSONDecodeError:
                     continue
@@ -333,14 +856,14 @@ class AgentRunner:
                 if depth == 0 and start >= 0:
                     try:
                         obj = json.loads(text[start:i + 1])
-                        if isinstance(obj, dict) and cls._RESULT_KEYS & obj.keys():
+                        if isinstance(obj, dict) and self._result_keys & obj.keys():
                             candidates.append(obj)
                     except json.JSONDecodeError:
                         pass
                     start = -1
 
         if candidates:
-            candidates.sort(key=lambda c: len(cls._RESULT_KEYS & c.keys()), reverse=True)
+            candidates.sort(key=lambda c: len(self._result_keys & c.keys()), reverse=True)
             return candidates[0]
 
         brace_start = text.find("{")
@@ -352,69 +875,8 @@ class AgentRunner:
                 pass
         return None
 
-    def _build_prompt(self, agent_key: str, task_input: dict) -> str:
-        parts = [f"Execute the {agent_key} workflow against repository: {self.repository_root}"]
-        if task_input.get("change_description"):
-            parts.append(f"\nChange: {task_input['change_description']}")
-        if task_input.get("affected_files"):
-            parts.append(f"\nAffected files: {json.dumps(task_input['affected_files'])}")
-        if task_input.get("change_id"):
-            parts.append(f"\nChange ID: {task_input['change_id']}")
-        if task_input.get("gate_name"):
-            parts.append(f"\nGate: {task_input['gate_name']}")
-        return "\n".join(parts)
-
-    def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
-        """Bridge tool calls to local skill implementations."""
-        result = self._dispatch_tool(tool_name, tool_input)
-        return json.dumps(result, default=str)
-
-    def _dispatch_tool(self, tool_name: str, tool_input: dict) -> Any:
-        repo = tool_input.get("repository_root", self.repository_root)
-
-        if tool_name == "discover_repository":
-            return discover_repository(repo)
-        elif tool_name == "read_file":
-            return read_file(repo, tool_input["relative_path"])
-        elif tool_name == "analyze_dependencies":
-            files = tool_input.get("discovered_files", self._get_discovered_files())
-            return analyze_dependencies(repo, files)
-        elif tool_name == "analyze_impact":
-            return self._run_impact(tool_input)
-        elif tool_name == "select_tests":
-            return select_tests(
-                tool_input["impact_result"],
-                self._get_discovered_files(),
-                self.test_scenarios,
-            )
-        elif tool_name == "execute_tests":
-            return execute_tests(
-                tool_input["selected_tests"],
-                tool_input.get("change_id", ""),
-                self.test_scenarios,
-            )
-        elif tool_name == "profile_data_assets":
-            return profile_data_assets(repo, self._get_discovered_files(), self.project_seed)
-        elif tool_name == "discover_delivery_process":
-            return discover_delivery_process(repo, self._get_discovered_files(), self.project_seed)
-        elif tool_name == "validate_checklist":
-            return validate_checklist(tool_input["checklist_items"], tool_input["evidence"])
-        elif tool_name == "assess_gate_readiness":
-            return assess_gate_readiness(
-                tool_input["gate_name"],
-                tool_input["checklist_result"],
-                tool_input.get("test_result"),
-                tool_input.get("impact_result"),
-            )
-        elif tool_name == "validate_evidence":
-            return validate_evidence(tool_input["evidence"], tool_input.get("requirements"))
-        else:
-            return {"error": f"Unknown tool: {tool_name}"}
-
     @staticmethod
     def _structure_markdown_response(text: str, agent_key: str) -> dict | None:
-        """Extract structured fields from a rich markdown analysis response."""
-        import re
         if not text or len(text) < 100:
             return None
 
@@ -481,229 +943,7 @@ class AgentRunner:
 
         return result
 
-    def _get_discovered_files(self) -> list[dict]:
-        if "discovered_files" not in self._context:
-            result = discover_repository(self.repository_root)
-            self._context["discovered_files"] = result.get("files", [])
-            self._context["discovery_result"] = result
-        return self._context["discovered_files"]
-
-    def _get_dependencies(self) -> dict:
-        if "dependencies" not in self._context:
-            files = self._get_discovered_files()
-            self._context["dependencies"] = analyze_dependencies(self.repository_root, files)
-        return self._context["dependencies"]
-
-    def _run_impact(self, task_input: dict) -> dict:
-        deps = self._get_dependencies()
-        return analyze_impact(
-            task_input.get("change_description", ""),
-            task_input.get("affected_files", []),
-            deps.get("dependency_graph", {}),
-            deps.get("nodes", []),
-            self.project_seed,
-        )
-
-    # --- Demo mode skill chains ---
-
-    def _demo_impact_analysis(self, task_input: dict, trace: dict) -> dict:
-        self._emit("thinking", text="I need to scan the repository, build the dependency graph, then trace the impact of this change.")
-
-        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
-        trace["steps"].append({"skill": "discover_repository"})
-        self._get_discovered_files()
-        self._emit("tool_result", name="discover_repository",
-                   result=f"Found {len(self._context.get('discovered_files', []))} files", latency=0.1)
-
-        self._emit("thinking", text="Repository scanned. Now building the dependency graph from imports and references.")
-        self._emit("tool_call", name="analyze_dependencies", input={})
-        trace["steps"].append({"skill": "analyze_dependencies"})
-        deps = self._get_dependencies()
-        self._emit("tool_result", name="analyze_dependencies",
-                   result=f"{deps.get('summary', {}).get('total_nodes', 0)} nodes, {deps.get('summary', {}).get('total_edges', 0)} edges", latency=0.1)
-
-        self._emit("thinking", text="Dependency graph built. Now tracing impact through affected files.")
-        self._emit("tool_call", name="analyze_impact", input={"change_description": task_input.get("change_description", "")})
-        trace["steps"].append({"skill": "analyze_impact"})
-        result = analyze_impact(
-            task_input.get("change_description", ""),
-            task_input.get("affected_files", []),
-            deps.get("dependency_graph", {}),
-            deps.get("nodes", []),
-            self.project_seed,
-        )
-        self._emit("tool_result", name="analyze_impact",
-                   result=f"Risk: {result.get('risk_level', '?')}, {result.get('total_affected_count', 0)} affected", latency=0.1)
-
-        result["agent_key"] = "impact-analysis-agent"
-        return result
-
-    def _demo_regression(self, task_input: dict, trace: dict) -> dict:
-        self._emit("thinking", text="I'll discover the repo, build dependencies, analyze impact, then select and run regression tests.")
-
-        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
-        trace["steps"].append({"skill": "discover_repository"})
-        files = self._get_discovered_files()
-        self._emit("tool_result", name="discover_repository",
-                   result=f"Found {len(files)} files", latency=0.1)
-
-        self._emit("thinking", text="Building dependency graph to understand what's connected.")
-        self._emit("tool_call", name="analyze_dependencies", input={})
-        trace["steps"].append({"skill": "analyze_dependencies"})
-        deps = self._get_dependencies()
-        self._emit("tool_result", name="analyze_dependencies",
-                   result=f"{deps.get('summary', {}).get('total_nodes', 0)} nodes", latency=0.1)
-
-        self._emit("thinking", text="Tracing impact of the change through the dependency graph.")
-        self._emit("tool_call", name="analyze_impact", input={"change_description": task_input.get("change_description", "")})
-        trace["steps"].append({"skill": "analyze_impact"})
-        impact = analyze_impact(
-            task_input.get("change_description", ""),
-            task_input.get("affected_files", []),
-            deps.get("dependency_graph", {}),
-            deps.get("nodes", []),
-            self.project_seed,
-        )
-        self._emit("tool_result", name="analyze_impact",
-                   result=f"Risk: {impact.get('risk_level', '?')}, {impact.get('total_affected_count', 0)} affected", latency=0.1)
-
-        self._emit("thinking", text="Impact identified. Selecting the minimal sufficient test set to cover affected entities.")
-        self._emit("tool_call", name="select_tests", input={"affected_count": impact.get("total_affected_count", 0)})
-        trace["steps"].append({"skill": "select_tests"})
-        selection = select_tests(impact, files, self.test_scenarios)
-        self._emit("tool_result", name="select_tests",
-                   result=f"Selected {selection.get('total_selected', 0)} tests, coverage {selection.get('coverage_ratio', 0):.0%}", latency=0.1)
-
-        self._emit("thinking", text=f"Running {selection.get('total_selected', 0)} selected tests against the change.")
-        self._emit("tool_call", name="execute_tests", input={"test_count": selection.get("total_selected", 0)})
-        trace["steps"].append({"skill": "execute_tests"})
-        execution = execute_tests(
-            selection["selected_tests"],
-            task_input.get("change_id", ""),
-            self.test_scenarios,
-        )
-        summary = execution.get("summary", {})
-        self._emit("tool_result", name="execute_tests",
-                   result=f"{summary.get('passed', 0)} passed, {summary.get('failed', 0)} failed → {execution.get('overall_status', '?')}", latency=0.1)
-
-        return {
-            "agent_key": "regression-agent",
-            "impact": impact,
-            "test_selection": selection,
-            "test_execution": execution,
-            "overall_status": execution["overall_status"],
-        }
-
-    def _demo_data_quality(self, task_input: dict, trace: dict) -> dict:
-        self._emit("thinking", text="I'll scan the repository for data assets, then profile schemas and quality indicators.")
-
-        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
-        trace["steps"].append({"skill": "discover_repository"})
-        files = self._get_discovered_files()
-        self._emit("tool_result", name="discover_repository",
-                   result=f"Found {len(files)} files", latency=0.1)
-
-        self._emit("thinking", text="Profiling data assets — examining schemas, columns, and quality checks.")
-        self._emit("tool_call", name="profile_data_assets", input={})
-        trace["steps"].append({"skill": "profile_data_assets"})
-        profiles = profile_data_assets(self.repository_root, files, self.project_seed)
-        self._emit("tool_result", name="profile_data_assets",
-                   result=f"{len(profiles.get('profiles', []))} assets profiled", latency=0.1)
-
-        return {
-            "agent_key": "data-quality-agent",
-            **profiles,
-        }
-
-    def _demo_data_model(self, task_input: dict, trace: dict) -> dict:
-        self._emit("thinking", text="I'll discover the repository, then profile data assets to build the logical model.")
-
-        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
-        trace["steps"].append({"skill": "discover_repository"})
-        files = self._get_discovered_files()
-        self._emit("tool_result", name="discover_repository",
-                   result=f"Found {len(files)} files", latency=0.1)
-
-        self._emit("tool_call", name="profile_data_assets", input={})
-        trace["steps"].append({"skill": "profile_data_assets"})
-        profiles = profile_data_assets(self.repository_root, files, self.project_seed)
-
-        entities = []
-        for p in profiles.get("profiles", []):
-            entities.append({
-                "name": p.get("asset_name", ""),
-                "domain": p.get("domain", "Unknown"),
-                "columns": p.get("columns", []),
-                "source": p.get("source", ""),
-                "provenance": "OBSERVED",
-            })
-
-        return {
-            "agent_key": "data-model-composer",
-            "entities": entities,
-            "entity_count": len(entities),
-            "profiles": profiles,
-        }
-
-    def _demo_delivery_compliance(self, task_input: dict, trace: dict) -> dict:
-        self._emit("thinking", text="I need to discover the delivery process, validate checklists, assess gate readiness, and verify evidence.")
-
-        self._emit("tool_call", name="discover_repository", input={})
-        trace["steps"].append({"skill": "discover_repository"})
-        files = self._get_discovered_files()
-        self._emit("tool_result", name="discover_repository",
-                   result=f"Found {len(files)} files", latency=0.1)
-
-        self._emit("thinking", text="Discovering delivery process — phases, gates, and checklists.")
-        self._emit("tool_call", name="discover_delivery_process", input={})
-        trace["steps"].append({"skill": "discover_delivery_process"})
-        process = discover_delivery_process(self.repository_root, files, self.project_seed)
-        self._emit("tool_result", name="discover_delivery_process",
-                   result=f"{len(process.get('phases', []))} phases found", latency=0.1)
-
-        evidence = task_input.get("evidence", [])
-        checklist_items = process.get("checklists", [])
-        if not checklist_items:
-            checklist_items = [
-                {"name": "Requirements documented", "required": True},
-                {"name": "Design reviewed", "required": True},
-                {"name": "Tests executed", "required": True},
-                {"name": "Security assessment complete", "required": True},
-            ]
-
-        self._emit("thinking", text=f"Validating {len(checklist_items)} checklist items against {len(evidence)} evidence items.")
-        self._emit("tool_call", name="validate_checklist", input={"items": len(checklist_items)})
-        trace["steps"].append({"skill": "validate_checklist"})
-        checklist_result = validate_checklist(checklist_items, evidence)
-        self._emit("tool_result", name="validate_checklist",
-                   result=f"Validated {len(checklist_items)} items", latency=0.1)
-
-        gate_name = task_input.get("gate_name", "Release Readiness Gate")
-        self._emit("thinking", text=f"Assessing gate readiness for: {gate_name}")
-        self._emit("tool_call", name="assess_gate_readiness", input={"gate": gate_name})
-        trace["steps"].append({"skill": "assess_gate_readiness"})
-        gate_result = assess_gate_readiness(
-            gate_name,
-            checklist_result,
-            task_input.get("test_result"),
-            task_input.get("impact_result"),
-        )
-        self._emit("tool_result", name="assess_gate_readiness",
-                   result=f"Gate: {'READY' if gate_result.get('ready') else 'BLOCKED'}", latency=0.1)
-
-        self._emit("tool_call", name="validate_evidence", input={"evidence_count": len(evidence)})
-        trace["steps"].append({"skill": "validate_evidence"})
-        ev_result = validate_evidence(evidence)
-        self._emit("tool_result", name="validate_evidence",
-                   result=f"Validated {len(evidence)} evidence items", latency=0.1)
-
-        return {
-            "agent_key": "delivery-compliance-agent",
-            "delivery_process": process,
-            "checklist_result": checklist_result,
-            "gate_assessment": gate_result,
-            "evidence_validation": ev_result,
-        }
+    # ── Stream parsing ─────────────────────────────────────
 
     def _parse_stream(self, response) -> tuple[list[dict], str]:
         content_blocks: list[dict] = []
@@ -747,36 +987,15 @@ class AgentRunner:
 
         return content_blocks, stop_reason
 
-    def get_traces(self) -> list[dict]:
-        return list(reversed(self._traces))
-
-    def build_context(self) -> dict[str, Any]:
-        """Build the full digital twin context by running discovery."""
-        files = self._get_discovered_files()
-        deps = self._get_dependencies()
-        profiles = profile_data_assets(self.repository_root, files, self.project_seed)
-        process = discover_delivery_process(self.repository_root, files, self.project_seed)
-
-        self._context["profiles"] = profiles
-        self._context["delivery_process"] = process
-
-        return {
-            "discovery": self._context.get("discovery_result", {}),
-            "dependencies": deps,
-            "profiles": profiles,
-            "delivery_process": process,
-            "project_seed": self.project_seed,
-        }
-
 
 def _summarize(result: dict) -> dict:
     summary = {}
-    if "overall_status" in result:
-        summary["status"] = result["overall_status"]
-    if "risk_level" in result:
-        summary["risk"] = result["risk_level"]
-    if "total_affected_count" in result:
-        summary["affected"] = result["total_affected_count"]
-    if "entity_count" in result:
-        summary["entities"] = result["entity_count"]
+    for key in ["overall_status", "risk_level", "total_affected_count", "entity_count",
+                 "agent_key", "coverage_ratio"]:
+        if key in result:
+            summary[key] = result[key]
+    if "test_execution" in result:
+        summary["test_summary"] = result["test_execution"].get("summary", {})
+    if "gate_assessment" in result:
+        summary["gate_ready"] = result["gate_assessment"].get("ready", False)
     return summary

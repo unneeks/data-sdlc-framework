@@ -1,10 +1,8 @@
-"""Agent registry — maps metamodel agent keys to Harness configurations.
+"""Agent registry — delegates to the YAML-driven agent_configs.yaml and tool_registry.yaml.
 
-Each agent configuration includes:
-- system_prompt: derived from the metamodel role/mission/capabilities
-- tools: the inline function tool names this agent can use
-- model: the model to use (maps metamodel model_name to Bedrock model IDs)
-- execution_model: PLANNER_EXECUTOR or ITERATIVE
+Provides backward-compatible accessors used by the CLI and other modules.
+All agent-specific configuration now lives in agents/agent_configs.yaml.
+Convention agents from .agentcore/ are auto-discovered and merged.
 """
 from __future__ import annotations
 
@@ -12,19 +10,67 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agents.tools.definitions import get_tools_for_agent, get_tools_for_agent_harness
+import yaml
 
-_MODEL_MAP = {
-    "claude-opus": "us.anthropic.claude-opus-4-6-v1",
-    "claude-sonnet": "us.anthropic.claude-opus-4-6-v1",
-    "claude-haiku": "us.anthropic.claude-opus-4-6-v1",
-    "gpt-4o-mini": "us.anthropic.claude-opus-4-6-v1",
-}
+_AGENTS_DIR = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = _AGENTS_DIR.parent
+
+_agent_data = yaml.safe_load((_AGENTS_DIR / "agent_configs.yaml").read_text()) or {}
+_model_map = _agent_data.get("model_map", {})
+
+
+def _merge_convention_agents(configs: dict) -> dict:
+    """Merge .agentcore/ convention agents into the config namespace.
+
+    Convention instruction files always inject their system_prompt and
+    user_prompt, even when the agent already exists in YAML config.
+    """
+    try:
+        from agents.conventions.parser import discover_conventions
+    except ImportError:
+        return configs
+    conv = discover_conventions(_PROJECT_ROOT)
+    if not conv:
+        return configs
+    for agent in conv.agents:
+        tool_names = []
+        for skill_name in agent.skills_used:
+            skill = conv.skills.get(skill_name)
+            if skill:
+                tool_names.extend(skill.required_tools)
+            else:
+                tool_names.append(skill_name)
+        tool_names = list(dict.fromkeys(tool_names))
+
+        if agent.key not in configs:
+            configs[agent.key] = {
+                "system_prompt": agent.system_prompt,
+                "user_prompt": agent.user_prompt,
+                "model": agent.model,
+                "execution_model": agent.execution_model,
+                "tools": tool_names,
+                "source": "convention",
+                "source_path": agent.source_path,
+            }
+        else:
+            existing = configs[agent.key]
+            if agent.system_prompt:
+                existing["system_prompt"] = agent.system_prompt
+            if agent.user_prompt:
+                existing["user_prompt"] = agent.user_prompt
+            existing["source"] = "convention"
+            existing["source_path"] = agent.source_path
+    return configs
+
+
+AGENT_CONFIGS: dict[str, dict[str, Any]] = _merge_convention_agents(
+    dict(_agent_data.get("agents", {}))
+)
 
 
 def _load_metamodel() -> dict:
     paths = [
-        Path(__file__).resolve().parent.parent.parent / "apps" / "web" / "src" / "data" / "metamodel.json",
+        _PROJECT_ROOT / "apps" / "web" / "src" / "data" / "metamodel.json",
     ]
     for p in paths:
         if p.exists():
@@ -35,143 +81,38 @@ def _load_metamodel() -> dict:
 _metamodel = _load_metamodel()
 
 
-AGENT_CONFIGS: dict[str, dict[str, Any]] = {
-    "impact-analysis-agent": {
-        "system_prompt": (
-            "You are the Impact Analysis Agent for a Data Engineering Digital Twin platform.\n\n"
-            "MISSION: Determine, before a change lands, which assets and delivery obligations it affects.\n\n"
-            "ROLE: Impact Analysis Engineer\n"
-            "CAPABILITIES: impact-analysis, lineage\n"
-            "DELIVERY CAPABILITIES: change-assurance\n\n"
-            "WORKFLOW:\n"
-            "1. Use discover_repository to scan the project structure\n"
-            "2. Use analyze_dependencies to build the dependency graph\n"
-            "3. Use analyze_impact to trace the change through the graph\n"
-            "4. Report: directly affected entities, transitively affected entities, risk level, "
-            "regulatory impact, and confidence for each claim\n\n"
-            "CONSTRAINTS:\n"
-            "- Every impact edge must carry provenance (OBSERVED or INFERRED) and confidence\n"
-            "- No impacted asset should be missed (recall over precision)\n"
-            "- Report delivery obligations alongside technical impact\n"
-            "- INFERRED findings cannot block delivery\n\n"
-            "Return your findings as structured JSON with: affected_assets, affected_pipelines, "
-            "risk_level, regulatory_impact, provenance, confidence."
-        ),
-        "model": "claude-sonnet",
-        "execution_model": "PLANNER_EXECUTOR",
-    },
-    "regression-agent": {
-        "system_prompt": (
-            "You are the Regression Agent for a Data Engineering Digital Twin platform.\n\n"
-            "MISSION: Guarantee that a change does not silently break existing behaviour.\n\n"
-            "ROLE: Regression Engineer\n"
-            "CAPABILITIES: regression-testing, impact-analysis, testing\n"
-            "DELIVERY CAPABILITIES: regression-assurance\n\n"
-            "WORKFLOW:\n"
-            "1. Use discover_repository to scan the project\n"
-            "2. Use analyze_dependencies to build the dependency graph\n"
-            "3. Use analyze_impact to determine what the change affects\n"
-            "4. Use select_tests to pick the minimal sufficient test set\n"
-            "5. Use execute_tests to run the selected tests\n"
-            "6. Report: test results, coverage, any failures with root cause hints\n\n"
-            "CONSTRAINTS:\n"
-            "- Selected tests must cover every impacted asset\n"
-            "- False positive rate must be below threshold\n"
-            "- Selection must be explainable against the dependency graph\n"
-            "- Test evidence must satisfy the test-readiness gate\n\n"
-            "Return results as structured JSON with: test_results, coverage_ratio, "
-            "overall_status, evidence, selection_rationale."
-        ),
-        "model": "claude-sonnet",
-        "execution_model": "PLANNER_EXECUTOR",
-    },
-    "data-quality-agent": {
-        "system_prompt": (
-            "You are the Data Quality Agent for a Data Engineering Digital Twin platform.\n\n"
-            "MISSION: Ensure data flowing through the project is correct, complete and fit for purpose.\n\n"
-            "ROLE: Data Quality Engineer\n"
-            "CAPABILITIES: data-quality, data-profiling, testing, metadata-management\n"
-            "DELIVERY CAPABILITIES: data-quality-assurance\n\n"
-            "WORKFLOW:\n"
-            "1. Use discover_repository to find all data assets and quality checks\n"
-            "2. Use profile_data_assets to profile schemas, columns, and quality indicators\n"
-            "3. Analyze gaps: which assets lack quality checks? Which columns lack constraints?\n"
-            "4. Report findings with profiling evidence\n\n"
-            "CONSTRAINTS:\n"
-            "- Findings must cite the profiling evidence behind them\n"
-            "- Proposed assertions must be executable, not prose\n"
-            "- Report both existing quality coverage and gaps\n\n"
-            "Return results as structured JSON with: profiles, quality_indicators, "
-            "gaps, recommendations, evidence."
-        ),
-        "model": "claude-sonnet",
-        "execution_model": "ITERATIVE",
-    },
-    "data-model-composer": {
-        "system_prompt": (
-            "You are the Data Model Composer for a Data Engineering Digital Twin platform.\n\n"
-            "MISSION: Produce logical data models traceable to business requirements.\n\n"
-            "ROLE: Data Model Engineer\n"
-            "CAPABILITIES: data-modelling, metadata-management\n"
-            "DELIVERY CAPABILITIES: architecture-assurance\n\n"
-            "WORKFLOW:\n"
-            "1. Use discover_repository to find schema files and data models\n"
-            "2. Use read_file to examine schemas and transformation logic\n"
-            "3. Use profile_data_assets to understand the data landscape\n"
-            "4. Analyze: entity relationships, naming conformance, traceability\n"
-            "5. Report: logical model, entity mapping, standards conformance\n\n"
-            "CONSTRAINTS:\n"
-            "- Every logical entity must trace to a business requirement\n"
-            "- Model must conform to enterprise naming standards\n"
-            "- Every entity needs an identified business owner\n\n"
-            "Return results as structured JSON with: entities, relationships, "
-            "traceability, conformance_score."
-        ),
-        "model": "claude-sonnet",
-        "execution_model": "PLANNER_EXECUTOR",
-    },
-    "delivery-compliance-agent": {
-        "system_prompt": (
-            "You are the Delivery Compliance Agent for a Data Engineering Digital Twin platform.\n\n"
-            "MISSION: Determine whether a change complies with the organization's delivery model.\n\n"
-            "ROLE: Delivery Compliance Engineer\n"
-            "CAPABILITIES: impact-analysis, governance\n"
-            "DELIVERY CAPABILITIES: change-assurance, compliance-assurance, release-assurance\n\n"
-            "WORKFLOW:\n"
-            "1. Use discover_delivery_process to find phases, tasks, gates, checklists\n"
-            "2. Use validate_checklist to check items against evidence\n"
-            "3. Use assess_gate_readiness to evaluate gate readiness\n"
-            "4. Use validate_evidence to verify evidence provenance and completeness\n"
-            "5. Report: gate readiness, blockers, missing evidence\n\n"
-            "CONSTRAINTS:\n"
-            "- Gate readiness must match the human decision that follows\n"
-            "- Never report BLOCKED on an advisory-only shortfall\n"
-            "- Every missing item must name the control it came from\n"
-            "- INFERRED findings cannot block delivery\n\n"
-            "Return results as structured JSON with: gate_assessment, checklist_status, "
-            "blockers, evidence_summary, recommendation."
-        ),
-        "model": "claude-sonnet",
-        "execution_model": "PLANNER_EXECUTOR",
-    },
-}
-
-
 def get_agent_config(agent_key: str) -> dict[str, Any] | None:
+    from agents.tools.definitions import get_tools_for_agent, get_tools_for_agent_harness
+
     config = AGENT_CONFIGS.get(agent_key)
     if not config:
         return None
+
+    model_key = config.get("model", "claude-sonnet")
+    bedrock_model_id = _model_map.get(model_key, model_key)
+
+    tool_names = config.get("tools", [])
+    if isinstance(tool_names, list) and tool_names and isinstance(tool_names[0], str):
+        tools = get_tools_for_agent(agent_key)
+        harness_tools = get_tools_for_agent_harness(agent_key)
+    else:
+        tools = tool_names
+        harness_tools = []
+
     return {
         **config,
-        "tools": get_tools_for_agent(agent_key),
-        "harness_tools": get_tools_for_agent_harness(agent_key),
-        "bedrock_model_id": _MODEL_MAP.get(config["model"], config["model"]),
+        "tools": tools,
+        "harness_tools": harness_tools,
+        "bedrock_model_id": bedrock_model_id,
     }
 
 
 def list_agents() -> list[dict[str, str]]:
     agents = _metamodel.get("agents", {}).get("agents", [])
+
+    yaml_keys = set(AGENT_CONFIGS.keys())
     result = []
+
     for a in agents:
         if a.get("execution_model") == "EXTERNAL_AGENT":
             continue
@@ -180,13 +121,24 @@ def list_agents() -> list[dict[str, str]]:
             "name": a["name"],
             "mission": a["mission"],
             "status": a.get("status", "CANDIDATE"),
-            "has_harness": a["key"] in AGENT_CONFIGS,
+            "has_harness": a["key"] in yaml_keys,
         })
+
+    for key, cfg in AGENT_CONFIGS.items():
+        if not any(r["key"] == key for r in result):
+            result.append({
+                "key": key,
+                "name": cfg.get("name", key.replace("-", " ").title()),
+                "mission": cfg.get("system_prompt", "")[:80] + "...",
+                "status": "ACTIVE",
+                "has_harness": True,
+                "source": cfg.get("source", "yaml"),
+            })
+
     return result
 
 
 def get_skill_metadata() -> list[dict]:
-    """Return metadata for all skills defined in the metamodel."""
     skills = _metamodel.get("skills", {}).get("skills", [])
     result = []
     for s in skills:

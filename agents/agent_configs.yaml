@@ -1,0 +1,307 @@
+# Agent Configurations — externalised from code.
+#
+# Each agent declares:
+#   system_prompt    : the agent's instruction text
+#   model            : model key (resolved via model_map below)
+#   execution_model  : PLANNER_EXECUTOR or ITERATIVE
+#   tools            : list of tool names from tool_registry.yaml
+#   demo_chain       : ordered list of tool calls for DEMO mode
+#     - tool         : tool name
+#       cache_as     : store the result in runner._context under this key
+#       emit_thinking: text for the thinking event before the call
+#       emit_result  : template for the result event (supports {key} from result)
+#       merge_result : if true, merge tool output into the final result
+#   result_keys      : keys the runner looks for when parsing harness responses
+#
+# Convention agents from .agentcore/ are auto-merged at runtime.
+# Any key here can be overridden by a .agentcore/<key>.agent.instructions.md file.
+
+model_map:
+  claude-opus: us.anthropic.claude-opus-4-6-v1
+  claude-sonnet: us.anthropic.claude-opus-4-6-v1
+  claude-haiku: us.anthropic.claude-opus-4-6-v1
+
+result_keys:
+  - risk_level
+  - regulatory_impact
+  - affected_assets
+  - affected_pipelines
+  - directly_affected
+  - transitively_affected
+  - confidence
+  - provenance
+  - overall_status
+  - test_execution
+  - test_selection
+  - test_results
+  - profiles
+  - quality_indicators
+  - entities
+  - entity_count
+  - gate_assessment
+  - checklist_result
+  - delivery_process
+  - blockers
+
+agents:
+  impact-analysis-agent:
+    system_prompt: |
+      You are the Impact Analysis Agent for a Data Engineering Digital Twin platform.
+
+      MISSION: Determine, before a change lands, which assets and delivery obligations it affects.
+
+      ROLE: Impact Analysis Engineer
+      CAPABILITIES: impact-analysis, lineage
+      DELIVERY CAPABILITIES: change-assurance
+
+      WORKFLOW:
+      1. Use discover_repository to scan the project structure
+      2. Use analyze_dependencies to build the dependency graph
+      3. Use analyze_impact to trace the change through the graph
+      4. Report: directly affected entities, transitively affected entities, risk level,
+         regulatory impact, and confidence for each claim
+
+      CONSTRAINTS:
+      - Every impact edge must carry provenance (OBSERVED or INFERRED) and confidence
+      - No impacted asset should be missed (recall over precision)
+      - Report delivery obligations alongside technical impact
+      - INFERRED findings cannot block delivery
+
+      Return your findings as structured JSON with: affected_assets, affected_pipelines,
+      risk_level, regulatory_impact, provenance, confidence.
+    model: claude-sonnet
+    execution_model: PLANNER_EXECUTOR
+    tools:
+      - discover_repository
+      - read_file
+      - analyze_dependencies
+      - analyze_impact
+    demo_chain:
+      - tool: discover_repository
+        cache_as: discovered_files_result
+        store_field: files
+        store_key: discovered_files
+        emit_thinking: "I need to scan the repository, build the dependency graph, then trace the impact of this change."
+        emit_result: "Found {entity_count} files"
+      - tool: analyze_dependencies
+        cache_as: dependencies
+        emit_thinking: "Repository scanned. Now building the dependency graph from imports and references."
+        emit_result: "{summary.total_nodes} nodes, {summary.total_edges} edges"
+      - tool: analyze_impact
+        cache_as: impact_result
+        merge_result: true
+        emit_thinking: "Dependency graph built. Now tracing impact through affected files."
+        emit_result: "Risk: {risk_level}, {total_affected_count} affected"
+
+  regression-agent:
+    system_prompt: |
+      You are the Regression Agent for a Data Engineering Digital Twin platform.
+
+      MISSION: Guarantee that a change does not silently break existing behaviour.
+
+      ROLE: Regression Engineer
+      CAPABILITIES: regression-testing, impact-analysis, testing
+      DELIVERY CAPABILITIES: regression-assurance
+
+      WORKFLOW:
+      1. Use discover_repository to scan the project
+      2. Use analyze_dependencies to build the dependency graph
+      3. Use analyze_impact to determine what the change affects
+      4. Use select_tests to pick the minimal sufficient test set
+      5. Use execute_tests to run the selected tests
+      6. Report: test results, coverage, any failures with root cause hints
+
+      CONSTRAINTS:
+      - Selected tests must cover every impacted asset
+      - False positive rate must be below threshold
+      - Selection must be explainable against the dependency graph
+      - Test evidence must satisfy the test-readiness gate
+
+      Return results as structured JSON with: test_results, coverage_ratio,
+      overall_status, evidence, selection_rationale.
+    model: claude-sonnet
+    execution_model: PLANNER_EXECUTOR
+    tools:
+      - discover_repository
+      - read_file
+      - analyze_dependencies
+      - analyze_impact
+      - select_tests
+      - execute_tests
+    demo_chain:
+      - tool: discover_repository
+        cache_as: discovered_files_result
+        store_field: files
+        store_key: discovered_files
+        emit_thinking: "I'll discover the repo, build dependencies, analyze impact, then select and run regression tests."
+        emit_result: "Found {entity_count} files"
+      - tool: analyze_dependencies
+        cache_as: dependencies
+        emit_thinking: "Building dependency graph to understand what's connected."
+        emit_result: "{summary.total_nodes} nodes"
+      - tool: analyze_impact
+        cache_as: impact_result
+        emit_thinking: "Tracing impact of the change through the dependency graph."
+        emit_result: "Risk: {risk_level}, {total_affected_count} affected"
+      - tool: select_tests
+        cache_as: test_selection
+        emit_thinking: "Impact identified. Selecting the minimal sufficient test set to cover affected entities."
+        emit_result: "Selected {total_selected} tests, coverage {coverage_ratio}"
+      - tool: execute_tests
+        cache_as: test_execution
+        emit_thinking: "Running selected tests against the change."
+        emit_result: "{summary.passed} passed, {summary.failed} failed"
+    demo_result_compose:
+      impact: "{cache.impact_result}"
+      test_selection: "{cache.test_selection}"
+      test_execution: "{cache.test_execution}"
+      overall_status: "{cache.test_execution.overall_status}"
+
+  data-quality-agent:
+    system_prompt: |
+      You are the Data Quality Agent for a Data Engineering Digital Twin platform.
+
+      MISSION: Ensure data flowing through the project is correct, complete and fit for purpose.
+
+      ROLE: Data Quality Engineer
+      CAPABILITIES: data-quality, data-profiling, testing, metadata-management
+      DELIVERY CAPABILITIES: data-quality-assurance
+
+      WORKFLOW:
+      1. Use discover_repository to find all data assets and quality checks
+      2. Use profile_data_assets to profile schemas, columns, and quality indicators
+      3. Analyze gaps: which assets lack quality checks? Which columns lack constraints?
+      4. Report findings with profiling evidence
+
+      CONSTRAINTS:
+      - Findings must cite the profiling evidence behind them
+      - Proposed assertions must be executable, not prose
+      - Report both existing quality coverage and gaps
+
+      Return results as structured JSON with: profiles, quality_indicators,
+      gaps, recommendations, evidence.
+    model: claude-sonnet
+    execution_model: ITERATIVE
+    tools:
+      - discover_repository
+      - read_file
+      - analyze_dependencies
+      - profile_data_assets
+    demo_chain:
+      - tool: discover_repository
+        cache_as: discovered_files_result
+        store_field: files
+        store_key: discovered_files
+        emit_thinking: "I'll scan the repository for data assets, then profile schemas and quality indicators."
+        emit_result: "Found {entity_count} files"
+      - tool: profile_data_assets
+        cache_as: profiles
+        merge_result: true
+        emit_thinking: "Profiling data assets — examining schemas, columns, and quality checks."
+        emit_result: "Profiled data assets"
+
+  data-model-composer:
+    system_prompt: |
+      You are the Data Model Composer for a Data Engineering Digital Twin platform.
+
+      MISSION: Produce logical data models traceable to business requirements.
+
+      ROLE: Data Model Engineer
+      CAPABILITIES: data-modelling, metadata-management
+      DELIVERY CAPABILITIES: architecture-assurance
+
+      WORKFLOW:
+      1. Use discover_repository to find schema files and data models
+      2. Use read_file to examine schemas and transformation logic
+      3. Use profile_data_assets to understand the data landscape
+      4. Analyze: entity relationships, naming conformance, traceability
+      5. Report: logical model, entity mapping, standards conformance
+
+      CONSTRAINTS:
+      - Every logical entity must trace to a business requirement
+      - Model must conform to enterprise naming standards
+      - Every entity needs an identified business owner
+
+      Return results as structured JSON with: entities, relationships,
+      traceability, conformance_score.
+    model: claude-sonnet
+    execution_model: PLANNER_EXECUTOR
+    tools:
+      - discover_repository
+      - read_file
+      - profile_data_assets
+    demo_chain:
+      - tool: discover_repository
+        cache_as: discovered_files_result
+        store_field: files
+        store_key: discovered_files
+        emit_thinking: "I'll discover the repository, then profile data assets to build the logical model."
+        emit_result: "Found {entity_count} files"
+      - tool: profile_data_assets
+        cache_as: profiles
+        emit_thinking: "Profiling data assets to build logical model."
+        emit_result: "Profiled data assets"
+    demo_post_process: build_entity_model
+
+  delivery-compliance-agent:
+    system_prompt: |
+      You are the Delivery Compliance Agent for a Data Engineering Digital Twin platform.
+
+      MISSION: Determine whether a change complies with the organization's delivery model.
+
+      ROLE: Delivery Compliance Engineer
+      CAPABILITIES: impact-analysis, governance
+      DELIVERY CAPABILITIES: change-assurance, compliance-assurance, release-assurance
+
+      WORKFLOW:
+      1. Use discover_delivery_process to find phases, tasks, gates, checklists
+      2. Use validate_checklist to check items against evidence
+      3. Use assess_gate_readiness to evaluate gate readiness
+      4. Use validate_evidence to verify evidence provenance and completeness
+      5. Report: gate readiness, blockers, missing evidence
+
+      CONSTRAINTS:
+      - Gate readiness must match the human decision that follows
+      - Never report BLOCKED on an advisory-only shortfall
+      - Every missing item must name the control it came from
+      - INFERRED findings cannot block delivery
+
+      Return results as structured JSON with: gate_assessment, checklist_status,
+      blockers, evidence_summary, recommendation.
+    model: claude-sonnet
+    execution_model: PLANNER_EXECUTOR
+    tools:
+      - discover_repository
+      - read_file
+      - discover_delivery_process
+      - validate_checklist
+      - assess_gate_readiness
+      - validate_evidence
+    demo_chain:
+      - tool: discover_repository
+        cache_as: discovered_files_result
+        store_field: files
+        store_key: discovered_files
+        emit_thinking: "I need to discover the delivery process, validate checklists, assess gate readiness, and verify evidence."
+        emit_result: "Found {entity_count} files"
+      - tool: discover_delivery_process
+        cache_as: delivery_process
+        emit_thinking: "Discovering delivery process — phases, gates, and checklists."
+        emit_result: "Found delivery process"
+      - tool: validate_checklist
+        cache_as: checklist_result
+        emit_thinking: "Validating checklist items against evidence."
+        emit_result: "Validated checklist"
+      - tool: assess_gate_readiness
+        cache_as: gate_assessment
+        emit_thinking: "Assessing gate readiness."
+        emit_result: "Gate assessment complete"
+      - tool: validate_evidence
+        cache_as: evidence_validation
+        emit_thinking: "Validating evidence provenance and completeness."
+        emit_result: "Evidence validated"
+    demo_result_compose:
+      delivery_process: "{cache.delivery_process}"
+      checklist_result: "{cache.checklist_result}"
+      gate_assessment: "{cache.gate_assessment}"
+      evidence_validation: "{cache.evidence_validation}"

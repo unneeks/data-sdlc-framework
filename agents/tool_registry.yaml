@@ -1,0 +1,184 @@
+# Tool Registry — maps tool names to skill implementations and argument resolution.
+#
+# Each tool declares:
+#   module/function : the Python callable
+#   args            : how to resolve each function parameter
+#
+# Argument sources:
+#   input       — from the tool_input dict the LLM provides
+#   context     — from runner context (repository_root, project_seed, test_scenarios)
+#   cache       — from a previously cached tool result (dot-path into _context)
+#   input_or    — try input first, fall back to another source
+#   default     — literal default value if no source matches
+
+tools:
+  discover_repository:
+    module: agents.skills.repository_discovery
+    function: discover_repository
+    args:
+      repository_root:
+        source: input_or_context
+        key: repository_root
+
+  read_file:
+    module: agents.skills.repository_discovery
+    function: read_file
+    args:
+      repository_root:
+        source: input_or_context
+        key: repository_root
+      relative_path:
+        source: input
+        key: relative_path
+
+  analyze_dependencies:
+    module: agents.skills.dependency_analysis
+    function: analyze_dependencies
+    args:
+      repository_root:
+        source: input_or_context
+        key: repository_root
+      discovered_files:
+        source: input_or_cache
+        input_key: discovered_files
+        cache_key: discovered_files
+
+  analyze_impact:
+    module: agents.skills.impact_analysis
+    function: analyze_impact
+    args:
+      change_description:
+        source: input_or_task
+        key: change_description
+        default: ""
+      affected_files:
+        source: input_or_task
+        key: affected_files
+        default: []
+      dependency_graph:
+        source: cache
+        cache_key: dependencies.dependency_graph
+        default: {}
+      nodes:
+        source: cache
+        cache_key: dependencies.nodes
+        default: []
+      project_seed:
+        source: context
+        key: project_seed
+        default: {}
+
+  select_tests:
+    module: agents.skills.test_selection
+    function: select_tests
+    args:
+      impact_result:
+        source: input_or_cache
+        input_key: impact_result
+        cache_key: impact_result
+      discovered_files:
+        source: cache
+        cache_key: discovered_files
+        default: []
+      test_scenarios:
+        source: context
+        key: test_scenarios
+        default: {}
+
+  execute_tests:
+    module: agents.skills.test_execution
+    function: execute_tests
+    args:
+      selected_tests:
+        source: input_or_cache
+        input_key: selected_tests
+        cache_key: test_selection.selected_tests
+        default: []
+      change_id:
+        source: input_or_task
+        key: change_id
+        default: ""
+      scenario_data:
+        source: context
+        key: test_scenarios
+        default: {}
+
+  profile_data_assets:
+    module: agents.skills.data_profiling
+    function: profile_data_assets
+    args:
+      repository_root:
+        source: input_or_context
+        key: repository_root
+      discovered_files:
+        source: cache
+        cache_key: discovered_files
+        default: []
+      project_seed:
+        source: context
+        key: project_seed
+        default: {}
+
+  discover_delivery_process:
+    module: agents.skills.delivery_process
+    function: discover_delivery_process
+    args:
+      repository_root:
+        source: input_or_context
+        key: repository_root
+      discovered_files:
+        source: cache
+        cache_key: discovered_files
+        default: []
+      project_seed:
+        source: context
+        key: project_seed
+        default: {}
+
+  validate_checklist:
+    module: agents.skills.delivery_process
+    function: validate_checklist
+    args:
+      checklist_items:
+        source: input_or_cache
+        input_key: checklist_items
+        cache_key: delivery_process.checklists
+        default: []
+      evidence:
+        source: input_or_task
+        key: evidence
+        default: []
+
+  assess_gate_readiness:
+    module: agents.skills.delivery_process
+    function: assess_gate_readiness
+    args:
+      gate_name:
+        source: input_or_task
+        key: gate_name
+        default: "Release Readiness Gate"
+      checklist_result:
+        source: input_or_cache
+        input_key: checklist_result
+        cache_key: checklist_result
+      test_result:
+        source: input
+        key: test_result
+        default: null
+      impact_result:
+        source: input
+        key: impact_result
+        default: null
+
+  validate_evidence:
+    module: agents.skills.evidence_validation
+    function: validate_evidence
+    args:
+      evidence:
+        source: input_or_task
+        key: evidence
+        default: []
+      requirements:
+        source: input
+        key: requirements
+        default: null
