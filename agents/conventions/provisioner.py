@@ -295,35 +295,152 @@ def provision_memory(agent_key: str, region: str = REGION) -> dict:
         }
 
 
+def inspect_s3_buckets(region: str = REGION) -> list[dict]:
+    """Discover all S3 buckets related to AgentCore in this account.
+
+    Returns a list of dicts with bucket metadata:
+        name, created, region, tags, object_count, total_size, prefixes
+    """
+    import boto3
+
+    s3 = boto3.client("s3", region_name=region)
+    all_buckets = s3.list_buckets().get("Buckets", [])
+
+    agentcore_buckets = []
+    for b in all_buckets:
+        name = b["Name"]
+        if not (name.startswith("agentcore-") or "kb" in name.lower()):
+            continue
+
+        info: dict[str, Any] = {
+            "name": name,
+            "created": b.get("CreationDate", "").isoformat() if hasattr(b.get("CreationDate", ""), "isoformat") else str(b.get("CreationDate", "")),
+        }
+
+        try:
+            loc = s3.get_bucket_location(Bucket=name)
+            info["region"] = loc.get("LocationConstraint") or "us-east-1"
+        except Exception:
+            info["region"] = "unknown"
+
+        try:
+            tags_resp = s3.get_bucket_tagging(Bucket=name)
+            info["tags"] = {t["Key"]: t["Value"] for t in tags_resp.get("TagSet", [])}
+        except Exception:
+            info["tags"] = {}
+
+        try:
+            objects = []
+            total_size = 0
+            prefixes = set()
+            paginator = s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=name, MaxKeys=500):
+                for obj in page.get("Contents", []):
+                    objects.append(obj["Key"])
+                    total_size += obj.get("Size", 0)
+                    parts = obj["Key"].split("/")
+                    if len(parts) > 1:
+                        prefixes.add(parts[0])
+            info["object_count"] = len(objects)
+            info["total_size_bytes"] = total_size
+            info["objects"] = objects[:50]
+            info["prefixes"] = sorted(prefixes)
+        except Exception:
+            info["object_count"] = 0
+            info["total_size_bytes"] = 0
+            info["objects"] = []
+            info["prefixes"] = []
+
+        agentcore_buckets.append(info)
+
+    return agentcore_buckets
+
+
+def find_existing_kb_bucket(
+    region: str = REGION,
+    project_root: str | Path | None = None,
+) -> dict | None:
+    """Find an existing AgentCore knowledgebase bucket to reuse.
+
+    Checks in order:
+    1. agentcore_config.json for a previously configured bucket
+    2. S3 for buckets matching the agentcore-kb-* naming pattern
+    """
+    config = _load_existing_config(project_root)
+    kb_info = config.get("knowledgebase", {})
+    if kb_info.get("bucket_name") and kb_info.get("status") in ("READY", "PARTIAL"):
+        import boto3
+        s3 = boto3.client("s3", region_name=region)
+        try:
+            s3.head_bucket(Bucket=kb_info["bucket_name"])
+            return kb_info
+        except Exception:
+            pass
+
+    buckets = inspect_s3_buckets(region)
+    kb_buckets = [b for b in buckets if b["name"].startswith("agentcore-kb-")]
+    if kb_buckets:
+        best = kb_buckets[0]
+        return {
+            "bucket_name": best["name"],
+            "s3_uri": f"s3://{best['name']}/",
+            "object_count": best.get("object_count", 0),
+            "total_size_bytes": best.get("total_size_bytes", 0),
+            "status": "EXISTING",
+            "tags": best.get("tags", {}),
+        }
+
+    return None
+
+
 def provision_knowledgebase(
     kb_config: KnowledgebaseConfig,
     project_name: str,
     region: str = REGION,
+    target_bucket: str | None = None,
+    project_root: str | Path | None = None,
 ) -> dict:
-    """Create an S3 bucket and upload knowledgebase files."""
-    import boto3
+    """Upload knowledgebase files to S3.
 
-    account_id = _get_account_id(region)
-    bucket_name = f"agentcore-kb-{account_id}-{region}-{uuid.uuid4().hex[:6]}"
+    If target_bucket is provided, uploads to that bucket.
+    Otherwise, searches for an existing agentcore-kb-* bucket and reuses it.
+    Creates a new bucket only if no existing one is found.
+    """
+    import boto3
 
     s3 = boto3.client("s3", region_name=region)
 
-    try:
-        create_args: dict[str, Any] = {"Bucket": bucket_name}
-        if region != "us-east-1":
-            create_args["CreateBucketConfiguration"] = {"LocationConstraint": region}
-        s3.create_bucket(**create_args)
-    except Exception as e:
-        return {"status": "FAILED", "error": f"Failed to create S3 bucket: {e}"}
+    bucket_name = target_bucket
+    reused = False
 
-    s3.put_bucket_tagging(
-        Bucket=bucket_name,
-        Tagging={"TagSet": [
-            {"Key": "agentcore:project", "Value": project_name},
-            {"Key": "agentcore:type", "Value": "knowledgebase"},
-            {"Key": "agentcore:managed-by", "Value": "convention-cli"},
-        ]},
-    )
+    if not bucket_name:
+        existing = find_existing_kb_bucket(region, project_root)
+        if existing:
+            bucket_name = existing["bucket_name"]
+            reused = True
+
+    if not bucket_name:
+        account_id = _get_account_id(region)
+        bucket_name = f"agentcore-kb-{account_id}-{region}-{uuid.uuid4().hex[:6]}"
+        try:
+            create_args: dict[str, Any] = {"Bucket": bucket_name}
+            if region != "us-east-1":
+                create_args["CreateBucketConfiguration"] = {"LocationConstraint": region}
+            s3.create_bucket(**create_args)
+        except Exception as e:
+            return {"status": "FAILED", "error": f"Failed to create S3 bucket: {e}"}
+
+    try:
+        s3.put_bucket_tagging(
+            Bucket=bucket_name,
+            Tagging={"TagSet": [
+                {"Key": "agentcore:project", "Value": project_name},
+                {"Key": "agentcore:type", "Value": "knowledgebase"},
+                {"Key": "agentcore:managed-by", "Value": "convention-cli"},
+            ]},
+        )
+    except Exception:
+        pass
 
     uploaded = 0
     errors = []
@@ -344,6 +461,7 @@ def provision_knowledgebase(
         "total_files": len(kb_config.files),
         "total_size_bytes": kb_config.total_size_bytes,
         "errors": errors,
+        "reused_bucket": reused,
         "status": "READY" if not errors else "PARTIAL",
     }
 
@@ -456,10 +574,22 @@ def provision_all(
 
     if conventions.knowledgebase:
         project_name = Path(conventions.root).name
-        _progress("knowledgebase", f"Creating S3 knowledgebase ({len(conventions.knowledgebase.files)} files)...")
+
+        existing_kb = find_existing_kb_bucket(region, project_root)
+        if existing_kb:
+            _progress("knowledgebase", f"Found existing bucket: {existing_kb['bucket_name']} — uploading files there...")
+        else:
+            _progress("knowledgebase", f"No existing bucket found — creating new one...")
+
+        _progress("knowledgebase", f"Uploading knowledgebase ({len(conventions.knowledgebase.files)} files)...")
         try:
-            kb = provision_knowledgebase(conventions.knowledgebase, project_name, region)
+            kb = provision_knowledgebase(
+                conventions.knowledgebase, project_name, region,
+                project_root=project_root,
+            )
             result.knowledgebase = kb
+            if kb.get("reused_bucket"):
+                _progress("knowledgebase", f"Reused existing bucket: {kb['bucket_name']}")
             if kb.get("errors"):
                 result.warnings.extend(kb["errors"])
         except Exception as e:

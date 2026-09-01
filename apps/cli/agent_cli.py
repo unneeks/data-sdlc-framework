@@ -16,6 +16,7 @@ Slash commands control the session:
     /create-agent    Create a new agent from .agentcore/ conventions
     /conventions     List convention-based agents
     /provision       Provision convention agents to AgentCore
+    /s3-inspect      Inspect existing S3 buckets for AgentCore
     /clear           Clear screen
     /help            Show commands
     /quit            Exit
@@ -29,6 +30,7 @@ Direct invocation:
     python agent_cli.py create-agent                       # Convention wizard
     python agent_cli.py conventions                        # List conventions
     python agent_cli.py provision                          # Provision to AgentCore
+    python agent_cli.py s3-inspect                         # Inspect S3 buckets
 """
 from __future__ import annotations
 
@@ -342,6 +344,67 @@ def cmd_provision():
     return run_provision_all_wizard(root_dir)
 
 
+def cmd_s3_inspect():
+    """Inspect existing S3 buckets configured for AgentCore."""
+    from agents.conventions.provisioner import inspect_s3_buckets, find_existing_kb_bucket
+
+    print(f"\n{BOLD}  S3 Bucket Inspection{RESET}")
+    print(f"  {'─'*50}\n")
+
+    try:
+        buckets = inspect_s3_buckets()
+    except Exception as e:
+        print(f"  {RED}Failed to list buckets: {e}{RESET}")
+        return
+
+    if not buckets:
+        print(f"  {DIM}No AgentCore-related S3 buckets found.{RESET}\n")
+        return
+
+    for b in buckets:
+        is_kb = b["name"].startswith("agentcore-kb-")
+        is_code = b["name"].startswith("agentcore-code-")
+        kind = f"{MAGENTA}KB{RESET}" if is_kb else f"{BLUE}CODE{RESET}" if is_code else f"{DIM}OTHER{RESET}"
+
+        print(f"  {kind} {CYAN}{b['name']}{RESET}")
+        print(f"    Region:   {b.get('region', '?')}")
+        print(f"    Created:  {b.get('created', '?')}")
+        print(f"    Objects:  {b.get('object_count', 0)}")
+
+        size = b.get("total_size_bytes", 0)
+        if size > 1_000_000:
+            print(f"    Size:     {size / 1_000_000:.1f} MB")
+        elif size > 1_000:
+            print(f"    Size:     {size / 1_000:.1f} KB")
+        else:
+            print(f"    Size:     {size} bytes")
+
+        if b.get("prefixes"):
+            print(f"    Prefixes: {', '.join(b['prefixes'])}")
+
+        if b.get("tags"):
+            print(f"    Tags:")
+            for tk, tv in b["tags"].items():
+                print(f"      {DIM}{tk}{RESET} = {tv}")
+
+        if b.get("objects"):
+            print(f"    Files (first {min(len(b['objects']), 10)}):")
+            for obj in b["objects"][:10]:
+                print(f"      {DIM}{obj}{RESET}")
+            if len(b["objects"]) > 10:
+                print(f"      {DIM}... and {len(b['objects']) - 10} more{RESET}")
+
+        print()
+
+    existing_kb = find_existing_kb_bucket(project_root=root_dir)
+    if existing_kb:
+        print(f"  {GREEN}Active KB bucket:{RESET} {BOLD}{existing_kb['bucket_name']}{RESET}")
+        print(f"  {DIM}This bucket will be reused for knowledgebase uploads.{RESET}")
+    else:
+        print(f"  {YELLOW}No active KB bucket.{RESET} A new one will be created on /provision.")
+    print()
+
+
 def cmd_help():
     print(f"""
   {BOLD}Slash Commands{RESET}
@@ -360,6 +423,7 @@ def cmd_help():
   {CYAN}/create-agent{RESET}   Create agent from .agentcore/ conventions
   {CYAN}/conventions{RESET}    List convention-based agents
   {CYAN}/provision{RESET}      Provision all conventions to AgentCore
+  {CYAN}/s3-inspect{RESET}     Inspect existing S3 buckets for AgentCore
 
   {CYAN}/clear{RESET}          Clear screen
   {CYAN}/help{RESET}           Show this help
@@ -475,6 +539,9 @@ def interactive(mode: str, scenario_id: str):
             elif cmd == "provision":
                 cmd_provision()
 
+            elif cmd in ("s3-inspect", "s3"):
+                cmd_s3_inspect()
+
             elif cmd == "clear":
                 os.system("clear")
 
@@ -497,7 +564,7 @@ def main():
     )
     parser.add_argument("command", nargs="?",
                         choices=["agents", "skills", "run", "workflow", "traces",
-                                 "create-agent", "conventions", "provision"],
+                                 "create-agent", "conventions", "provision", "s3-inspect"],
                         help="Command to execute (omit for interactive mode)")
     parser.add_argument("agent_key", nargs="?", help="Agent key (for 'run' command)")
     parser.add_argument("--mode", default=os.environ.get("AGENT_MODE", "DEMO"),
@@ -557,6 +624,8 @@ def main():
         cmd_conventions()
     elif args.command == "provision":
         cmd_provision()
+    elif args.command == "s3-inspect":
+        cmd_s3_inspect()
 
 
 if __name__ == "__main__":
