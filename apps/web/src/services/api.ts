@@ -227,14 +227,31 @@ export async function initializeWorkflow(scenarioId: string): Promise<WorkflowSt
   return await res.json();
 }
 
-export async function workflowNextStep(): Promise<WorkflowState> {
-  const res = await fetch(`${API_BASE}/workflow/next`, { method: 'POST' });
-  return await res.json();
+async function pollUntilDone(taskId: string, onProgress?: (state: WorkflowState) => void): Promise<WorkflowState> {
+  while (true) {
+    await new Promise(r => setTimeout(r, 2000));
+    const res = await fetch(`${API_BASE}/workflow/poll/${taskId}`);
+    const data = await res.json();
+    if (data.status === 'RUNNING') {
+      if (onProgress && data.workflow) onProgress(data.workflow);
+      continue;
+    }
+    return data.result;
+  }
 }
 
-export async function workflowRunAll(): Promise<WorkflowState> {
+export async function workflowNextStep(onProgress?: (state: WorkflowState) => void): Promise<WorkflowState> {
+  const res = await fetch(`${API_BASE}/workflow/next`, { method: 'POST' });
+  const { task_id, error } = await res.json();
+  if (error) throw new Error(error);
+  return pollUntilDone(task_id, onProgress);
+}
+
+export async function workflowRunAll(onProgress?: (state: WorkflowState) => void): Promise<WorkflowState> {
   const res = await fetch(`${API_BASE}/workflow/run-all`, { method: 'POST' });
-  return await res.json();
+  const { task_id, error } = await res.json();
+  if (error) throw new Error(error);
+  return pollUntilDone(task_id, onProgress);
 }
 
 export async function getWorkflowState(): Promise<WorkflowState> {

@@ -47,13 +47,20 @@ export default function App() {
 
   const toggleMode = async () => {
     const newMode = harnessMode === 'REAL' ? 'DEMO' : 'REAL';
-    const res = await fetch(`${API_BASE}/harness/mode`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: newMode })
-    });
-    if (res.ok) {
-      const data = await res.json();
+    const [harnessRes, agentsRes] = await Promise.all([
+      fetch(`${API_BASE}/harness/mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: newMode })
+      }),
+      fetch(`${API_BASE}/agents/mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: newMode })
+      }),
+    ]);
+    if (harnessRes.ok) {
+      const data = await harnessRes.json();
       setHarnessMode(data.mode);
     }
   };

@@ -72,7 +72,9 @@ export const WorkflowSimulation: React.FC = () => {
     addLog(`[Agent] Executing: ${stepName}...`);
 
     try {
-      const state = await workflowNextStep();
+      const state = await workflowNextStep((progress) => {
+        setWorkflow(progress);
+      });
       setWorkflow(state);
 
       const step = state.steps[currentIdx];
@@ -103,15 +105,27 @@ export const WorkflowSimulation: React.FC = () => {
     setLoading(true);
     addLog('[System] Running all steps autonomously...');
 
+    let lastReportedStep = workflow.current_step;
     try {
-      const state = await workflowRunAll();
+      const state = await workflowRunAll((progress) => {
+        setWorkflow(progress);
+        for (let i = lastReportedStep; i < progress.steps.length; i++) {
+          const step = progress.steps[i];
+          if (step.status === 'COMPLETED' || step.status === 'FAILED') {
+            const summary = step.result_summary || {};
+            addLog(`[Agent] ${step.status === 'COMPLETED' ? '✓' : '✗'} ${step.name} — ${formatSummary(summary)}`);
+            lastReportedStep = i + 1;
+          }
+        }
+      });
       setWorkflow(state);
 
       for (let i = 0; i < state.steps.length; i++) {
         const step = state.steps[i];
-        const summary = step.result_summary || {};
-        addLog(`[Agent] ${step.status === 'COMPLETED' ? '✓' : '✗'} ${step.name} — ${formatSummary(summary)}`);
-
+        if (i >= lastReportedStep) {
+          const summary = step.result_summary || {};
+          addLog(`[Agent] ${step.status === 'COMPLETED' ? '✓' : '✗'} ${step.name} — ${formatSummary(summary)}`);
+        }
         try {
           const result = await getWorkflowStepResult(i);
           setStepResults(prev => ({ ...prev, [i]: result }));

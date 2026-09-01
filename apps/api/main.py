@@ -349,6 +349,24 @@ def get_skills():
     return get_skill_metadata()
 
 
+_async_tasks: dict[str, dict] = {}
+
+
+def _run_in_thread(task_id: str, fn, *args, **kwargs):
+    """Run a function in a thread and store the result."""
+    import threading
+    def worker():
+        try:
+            result = fn(*args, **kwargs)
+            _async_tasks[task_id]["result"] = result
+            _async_tasks[task_id]["status"] = "DONE"
+        except Exception as e:
+            _async_tasks[task_id]["result"] = {"error": str(e)}
+            _async_tasks[task_id]["status"] = "FAILED"
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+
+
 @app.post("/api/agents/run")
 def run_agent(payload: dict):
     """Run a specific agent against the test-data corpus."""
@@ -391,18 +409,36 @@ def initialize_workflow(payload: dict):
 
 @app.post("/api/workflow/next")
 def workflow_next_step():
-    """Execute the next step in the active workflow."""
+    """Kick off the next step asynchronously. Returns immediately."""
     if _active_workflow is None:
-        return {"error": "No active workflow. Call /api/workflow/initialize first."}
-    return _active_workflow.next_step()
+        return JSONResponse(status_code=400, content={"error": "No active workflow. Call /api/workflow/initialize first."})
+    task_id = f"wf-next-{uuid.uuid4().hex[:8]}"
+    _async_tasks[task_id] = {"status": "RUNNING", "result": None}
+    _run_in_thread(task_id, _active_workflow.next_step)
+    return {"task_id": task_id, "status": "ACCEPTED"}
 
 
 @app.post("/api/workflow/run-all")
 def workflow_run_all():
-    """Run all remaining workflow steps autonomously."""
+    """Kick off all remaining steps asynchronously. Returns immediately."""
     if _active_workflow is None:
-        return {"error": "No active workflow. Call /api/workflow/initialize first."}
-    return _active_workflow.run_all()
+        return JSONResponse(status_code=400, content={"error": "No active workflow. Call /api/workflow/initialize first."})
+    task_id = f"wf-all-{uuid.uuid4().hex[:8]}"
+    _async_tasks[task_id] = {"status": "RUNNING", "result": None}
+    _run_in_thread(task_id, _active_workflow.run_all)
+    return {"task_id": task_id, "status": "ACCEPTED"}
+
+
+@app.get("/api/workflow/poll/{task_id}")
+def poll_task(task_id: str):
+    """Poll for async task completion."""
+    task = _async_tasks.get(task_id)
+    if not task:
+        return JSONResponse(status_code=404, content={"error": "Unknown task_id"})
+    if task["status"] == "RUNNING":
+        state = _active_workflow.get_state() if _active_workflow else {}
+        return {"status": "RUNNING", "workflow": state}
+    return {"status": task["status"], "result": task["result"]}
 
 
 @app.get("/api/workflow/state")
