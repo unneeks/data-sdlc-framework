@@ -242,7 +242,10 @@ class AgentRunner:
 
     # ── Public interface ───────────────────────────────────
 
-    def run_agent(self, agent_key: str, task_input: dict) -> dict[str, Any]:
+    def run_agent(self, agent_key: str, task_input: dict,
+                  tools_override: list[str] | None = None) -> dict[str, Any]:
+        """Run an agent.  Pass *tools_override* (a list of tool names)
+        to restrict the tools available to the agent for this invocation."""
         logger.info("╔══ run_agent CALLED | agent=%s | mode=%s | input_keys=%s",
                      agent_key, self.mode, list(task_input.keys()))
 
@@ -250,6 +253,14 @@ class AgentRunner:
         if not config:
             logger.error("║ Unknown agent: %s", agent_key)
             return {"error": f"Unknown agent: {agent_key}"}
+
+        if tools_override is not None:
+            config = {
+                **config,
+                "tools": _build_tool_definitions(tools_override, self._tool_registry),
+                "harness_tools": _build_harness_tools(tools_override, self._tool_registry),
+                "tool_names": tools_override,
+            }
 
         logger.info("║ Config loaded | model=%s | tools=%d | source=%s",
                      config.get("bedrock_model_id", "?"),

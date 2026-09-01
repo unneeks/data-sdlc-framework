@@ -243,6 +243,114 @@ agents:
         emit_result: "Profiled data assets"
     demo_post_process: build_entity_model
 
+  test-planner-agent:
+    system_prompt: |
+      You are the Test Planner Agent for a Data Engineering Digital Twin platform.
+
+      MISSION: Generate comprehensive test plans based on approved requirements and design documents.
+
+      ROLE: Test Planning Engineer
+      CAPABILITIES: testing, test-planning
+      DELIVERY CAPABILITIES: test-assurance
+
+      WORKFLOW:
+      1. Use discover_repository to scan the project structure
+      2. Use analyze_dependencies to understand the dependency graph
+      3. Use select_tests to identify the test set needed
+      4. Produce a structured test plan with test cases, strategy, and exit criteria
+
+      CONSTRAINTS:
+      - Every test case must trace to a requirement or design decision
+      - Test plan must cover both functional and non-functional requirements
+      - Include data reconciliation tests for migration scenarios
+      - Provide clear exit criteria and risk assessment
+
+      Return your findings as structured JSON with: test_plan, test_cases,
+      test_strategy, exit_criteria, risk_assessment.
+    model: claude-sonnet
+    execution_model: ITERATIVE
+    tools:
+      - discover_repository
+      - read_file
+      - analyze_dependencies
+      - analyze_impact
+      - select_tests
+    demo_chain:
+      - tool: discover_repository
+        cache_as: discovered_files_result
+        store_field: files
+        store_key: discovered_files
+        emit_thinking: "Scanning repository to understand project structure and test landscape."
+        emit_result: "Found {entity_count} files"
+      - tool: analyze_dependencies
+        cache_as: dependencies
+        emit_thinking: "Building dependency graph to identify test boundaries."
+        emit_result: "{summary.total_nodes} nodes, {summary.total_edges} edges"
+      - tool: analyze_impact
+        cache_as: impact_result
+        emit_thinking: "Analyzing change impact to determine test scope."
+        emit_result: "Risk: {risk_level}, {total_affected_count} affected"
+      - tool: select_tests
+        cache_as: test_selection
+        merge_result: true
+        emit_thinking: "Selecting test cases based on dependencies and impact analysis."
+        emit_result: "Selected {total_selected} tests, coverage {coverage_ratio}"
+    demo_result_compose:
+      test_selection: "{cache.test_selection}"
+      test_plan:
+        title: "Migration Regression Test Plan"
+        version: "1.0-DRAFT"
+        strategy: "Risk-based testing with full reconciliation coverage"
+        scope: "All affected pipelines and data assets from lakehouse migration"
+      test_cases:
+        - id: "TC-01"
+          name: "Salesforce feed ingestion completeness"
+          priority: "P1"
+          category: "Integration"
+          requirement_trace: "FR-01"
+        - id: "TC-02"
+          name: "SAP feed ingestion completeness"
+          priority: "P1"
+          category: "Integration"
+          requirement_trace: "FR-02"
+        - id: "TC-03"
+          name: "Schema mapping validation"
+          priority: "P1"
+          category: "Unit"
+          requirement_trace: "FR-01, FR-02"
+        - id: "TC-04"
+          name: "Timestamp precision across Parquet conversion"
+          priority: "P1"
+          category: "Data Quality"
+          requirement_trace: "NFR-01"
+        - id: "TC-05"
+          name: "Customer 360 model output consistency"
+          priority: "P2"
+          category: "Regression"
+          requirement_trace: "FR-03"
+        - id: "TC-06"
+          name: "Reconciliation match rate >= 99.95%"
+          priority: "P1"
+          category: "Reconciliation"
+          requirement_trace: "FR-03"
+        - id: "TC-07"
+          name: "Rollback procedure validation"
+          priority: "P1"
+          category: "Operational"
+          requirement_trace: "NFR-03"
+      exit_criteria:
+        - "All P1 test cases pass"
+        - "No critical defects open"
+        - "Reconciliation match rate >= 99.95%"
+        - "Rollback tested successfully"
+      risk_assessment:
+        overall_risk: "MEDIUM"
+        key_risks:
+          - risk: "Timestamp precision drift in Parquet conversion"
+            mitigation: "Dedicated TC-04 with microsecond validation"
+          - risk: "Data volume impact on reconciliation performance"
+            mitigation: "Staged reconciliation with sampling for large tables"
+
   delivery-compliance-agent:
     system_prompt: |
       You are the Delivery Compliance Agent for a Data Engineering Digital Twin platform.
