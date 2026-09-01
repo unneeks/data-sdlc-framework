@@ -3,6 +3,7 @@ FastAPI Backend Server for Agentic Data Engineering Engineering System.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import asyncio
 import json
 import uuid
@@ -26,6 +27,7 @@ from harness import store as harness_store
 
 from agents.runner import AgentRunner
 from agents.workflow import WorkflowRunner
+from agents.sdlc_orchestrator import SDLCOrchestrator
 from agents.harness_agents.registry import list_agents as list_harness_agents, get_skill_metadata
 
 app = FastAPI(
@@ -474,6 +476,74 @@ def get_test_scenarios():
         }
         for s in scenarios
     ]
+
+
+# --- SDLC Demo Orchestrator ---
+_active_sdlc: SDLCOrchestrator | None = None
+
+
+@app.post("/api/sdlc-demo/initialize")
+def sdlc_demo_initialize():
+    """Initialize a new SDLC demo workflow with the orchestrator."""
+    global _active_sdlc
+    _active_sdlc = SDLCOrchestrator(agent_runner)
+    result = _active_sdlc.trigger_event("start_workflow")
+    return result
+
+
+@app.get("/api/sdlc-demo/status")
+def sdlc_demo_status():
+    """Get current SDLC demo orchestrator status."""
+    if _active_sdlc is None:
+        return {"error": "No active SDLC workflow. Call /api/sdlc-demo/initialize first."}
+    return _active_sdlc.get_status()
+
+
+@app.post("/api/sdlc-demo/approve")
+def sdlc_demo_approve(payload: dict):
+    """Approve a document in the SDLC workflow.  May trigger agent invocation."""
+    if _active_sdlc is None:
+        return JSONResponse(status_code=400, content={"error": "No active SDLC workflow."})
+    document_id = payload.get("document_id", "")
+    task_id = f"sdlc-approve-{uuid.uuid4().hex[:8]}"
+    _async_tasks[task_id] = {"status": "RUNNING", "result": None}
+    _run_in_thread(
+        task_id,
+        _active_sdlc.trigger_event,
+        "approve_document",
+        {"document_id": document_id},
+    )
+    return {"task_id": task_id, "status": "ACCEPTED"}
+
+
+@app.get("/api/sdlc-demo/document/{doc_id}")
+def sdlc_demo_document(doc_id: str):
+    """Get a specific document's content and status."""
+    if _active_sdlc is None:
+        return JSONResponse(status_code=400, content={"error": "No active SDLC workflow."})
+    doc = _active_sdlc.documents.get(doc_id)
+    if not doc:
+        return JSONResponse(status_code=404, content={"error": f"Document '{doc_id}' not found"})
+    return doc.to_dict()
+
+
+@app.get("/api/sdlc-demo/artifact/{artifact_key}")
+def sdlc_demo_artifact(artifact_key: str):
+    """Get a generated artifact (e.g. test plan draft)."""
+    if _active_sdlc is None:
+        return JSONResponse(status_code=400, content={"error": "No active SDLC workflow."})
+    artifact = _active_sdlc.artifacts.get(artifact_key)
+    if not artifact:
+        return JSONResponse(status_code=404, content={"error": f"Artifact '{artifact_key}' not found"})
+    return artifact
+
+
+@app.post("/api/sdlc-demo/reset")
+def sdlc_demo_reset():
+    """Reset the SDLC demo workflow."""
+    global _active_sdlc
+    _active_sdlc = None
+    return {"status": "RESET"}
 
 
 from fastapi.staticfiles import StaticFiles
