@@ -45,14 +45,20 @@ class AgentRunner:
     """Runs metamodel agents against a repository corpus."""
 
     def __init__(self, repository_root: str, project_seed: dict | None = None,
-                 test_scenarios: dict | None = None, mode: str = "DEMO"):
+                 test_scenarios: dict | None = None, mode: str = "DEMO",
+                 on_event=None):
         self.repository_root = repository_root
         self.project_seed = project_seed or {}
         self.test_scenarios = test_scenarios or {}
         self.mode = mode
+        self.on_event = on_event
         self._context: dict[str, Any] = {}
         self._traces: list[dict] = []
         self._harness_arns: dict[str, str] = _load_harness_config()
+
+    def _emit(self, event_type: str, **kwargs):
+        if self.on_event:
+            self.on_event(event_type, kwargs)
 
     def reload_harness_config(self):
         """Reload harness ARNs (call after running setup_agentcore.py)."""
@@ -68,39 +74,61 @@ class AgentRunner:
         Returns:
             Structured result from the agent's skill chain.
         """
+        logger.info("╔══ run_agent CALLED | agent=%s | mode=%s | input_keys=%s",
+                     agent_key, self.mode, list(task_input.keys()))
         config = get_agent_config(agent_key)
         if not config:
+            logger.error("║ Unknown agent: %s", agent_key)
             return {"error": f"Unknown agent: {agent_key}"}
 
+        logger.info("║ Config loaded | model=%s | tools=%d | harness_tools=%d",
+                     config.get("bedrock_model_id", "?"),
+                     len(config.get("tools", [])),
+                     len(config.get("harness_tools", [])))
+
+        session_id = str(uuid.uuid4())
         trace = {
             "agent_key": agent_key,
-            "session_id": str(uuid.uuid4()),
+            "session_id": session_id,
             "start_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "mode": self.mode,
             "steps": [],
         }
+        logger.info("║ Session: %s", session_id)
 
+        start = time.monotonic()
         try:
             if self.mode == "REAL":
+                logger.info("║ Dispatching to _run_harness (REAL mode)")
+                logger.info("║ Available harness ARNs: %s", list(self._harness_arns.keys()))
                 result = self._run_harness(agent_key, config, task_input, trace)
             else:
+                logger.info("║ Dispatching to _run_demo (DEMO mode)")
                 result = self._run_demo(agent_key, config, task_input, trace)
 
+            elapsed = time.monotonic() - start
             trace["end_time"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             trace["status"] = "COMPLETED"
             trace["result_summary"] = _summarize(result)
             self._traces.append(trace)
+            logger.info("╚══ run_agent COMPLETED | agent=%s | %.1fs | result_keys=%s",
+                         agent_key, elapsed, list(result.keys())[:10])
             return result
 
         except Exception as e:
+            elapsed = time.monotonic() - start
             trace["end_time"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             trace["status"] = "FAILED"
             trace["error"] = str(e)
             self._traces.append(trace)
+            logger.error("╚══ run_agent FAILED | agent=%s | %.1fs | %s: %s",
+                          agent_key, elapsed, type(e).__name__, e)
             return {"error": str(e), "agent_key": agent_key}
 
     def _run_demo(self, agent_key: str, config: dict, task_input: dict, trace: dict) -> dict:
         """Run agent in demo mode — direct skill execution, no LLM."""
+        logger.info("  ├─ DEMO dispatch for %s", agent_key)
+        self._emit("thinking", text=f"Planning execution for {agent_key} in DEMO mode...")
         if agent_key == "impact-analysis-agent":
             return self._demo_impact_analysis(task_input, trace)
         elif agent_key == "regression-agent":
@@ -124,15 +152,22 @@ class AgentRunner:
 
         harness_arn = self._harness_arns.get(agent_key)
         if not harness_arn:
-            logger.warning("No harness ARN for %s, falling back to demo mode", agent_key)
-            return self._run_demo(agent_key, config, task_input, trace)
+            raise RuntimeError(
+                f"No harness ARN configured for {agent_key}. "
+                f"Run setup_agentcore.py first or check agentcore_config.json."
+            )
 
         region = "us-west-2"
+        logger.info("  ├─ HARNESS init | arn=%s | region=%s", harness_arn, region)
         client = boto3.client("bedrock-agentcore", region_name=region)
 
         session_id = trace["session_id"]
         prompt = self._build_prompt(agent_key, task_input)
         harness_tools = config.get("harness_tools", [])
+
+        logger.info("  ├─ Prompt: %.200s", prompt)
+        logger.info("  ├─ Model: %s | Tools: %d | System prompt: %d chars",
+                     config["bedrock_model_id"], len(harness_tools), len(config["system_prompt"]))
 
         trace["harness_arn"] = harness_arn
         trace["model"] = config["bedrock_model_id"]
@@ -148,23 +183,43 @@ class AgentRunner:
             invoke_kwargs["tools"] = harness_tools
 
         for turn in range(20):
-            logger.info("Harness turn %d for %s (session=%s)", turn, agent_key, session_id)
+            logger.info("  ├─ Turn %d | invoking harness...", turn)
+            turn_start = time.monotonic()
             response = client.invoke_harness(**invoke_kwargs)
+            turn_elapsed = time.monotonic() - turn_start
+            logger.info("  │  invoke_harness returned in %.1fs", turn_elapsed)
 
             content_blocks, stop_reason = self._parse_stream(response)
-            trace["steps"].append({"turn": turn, "stop_reason": stop_reason})
+            logger.info("  │  stop_reason=%s | content_blocks=%d", stop_reason, len(content_blocks))
+
+            reasoning_texts = [b["text"] for b in content_blocks if b.get("type") == "text" and b.get("text", "").strip()]
+            tool_calls_in_turn = [b for b in content_blocks if b.get("type") == "toolUse"]
+
+            step_record = {
+                "turn": turn,
+                "stop_reason": stop_reason,
+                "latency_s": round(turn_elapsed, 1),
+                "reasoning": reasoning_texts,
+                "tool_calls": [{"name": t["name"], "input": t.get("input", {})} for t in tool_calls_in_turn],
+            }
+
+            for rt in reasoning_texts:
+                self._emit("thinking", text=rt)
+                for line in rt.split("\n")[:10]:
+                    if line.strip():
+                        logger.info("  │  💭 %s", line.strip()[:200])
 
             if stop_reason == "end_turn":
-                text = " ".join(
-                    b.get("text", "") for b in content_blocks if b.get("type") == "text"
-                )
+                text = " ".join(reasoning_texts)
+                self._emit("response", text=text[:1000], turn=turn)
                 if not text.strip():
                     all_text = " ".join(b.get("text", "") for b in content_blocks if b.get("text"))
                     if all_text.strip():
                         text = all_text
-                logger.info("end_turn text length=%d, blocks=%d, block_types=%s",
-                            len(text), len(content_blocks),
-                            [b.get("type", "?") for b in content_blocks])
+                logger.info("  │  📝 FINAL RESPONSE | length=%d chars", len(text))
+                logger.info("  │  📝 Preview: %.500s", text[:500])
+                step_record["final_response_length"] = len(text)
+                trace["steps"].append(step_record)
                 try:
                     Path("/tmp/last_harness_response.txt").write_text(text)
                 except Exception:
@@ -183,10 +238,24 @@ class AgentRunner:
             if stop_reason == "tool_use":
                 assistant_content = []
                 tool_results = []
+                tool_executions = []
+
+                trace["steps"].append(step_record)
 
                 for block in content_blocks:
                     if block.get("type") == "toolUse":
+                        self._emit("tool_call", name=block["name"], input=block.get("input", {}))
+                        logger.info("  │  ┌─ TOOL CALL: %s | input_keys=%s",
+                                     block["name"], list(block.get("input", {}).keys()))
+                        logger.info("  │  │  input: %.300s", json.dumps(block.get("input", {}))[:300])
+                        tool_start = time.monotonic()
                         tool_result_text = self._execute_tool(block["name"], block["input"])
+                        tool_elapsed = time.monotonic() - tool_start
+                        self._emit("tool_result", name=block["name"],
+                                   result=tool_result_text[:500], latency=round(tool_elapsed, 1))
+                        logger.info("  │  └─ TOOL DONE: %s | %.1fs | result_len=%d",
+                                     block["name"], tool_elapsed, len(tool_result_text))
+                        logger.info("  │     result preview: %.300s", tool_result_text[:300])
                         assistant_content.append({
                             "toolUse": {
                                 "toolUseId": block["toolUseId"],
@@ -201,12 +270,16 @@ class AgentRunner:
                                 "status": "success",
                             }
                         })
-                        trace["steps"].append({
+                        tool_executions.append({
                             "tool": block["name"],
-                            "input_preview": str(block["input"])[:200],
+                            "input": block.get("input", {}),
+                            "result_preview": tool_result_text[:500],
+                            "latency_s": round(tool_elapsed, 1),
                         })
                     elif block.get("type") == "text" and block.get("text"):
                         assistant_content.append({"text": block["text"]})
+
+                trace["steps"].append({"turn": turn, "type": "tool_execution", "tools": tool_executions})
 
                 invoke_kwargs = {
                     "harnessArn": harness_arn,
@@ -434,12 +507,23 @@ class AgentRunner:
     # --- Demo mode skill chains ---
 
     def _demo_impact_analysis(self, task_input: dict, trace: dict) -> dict:
+        self._emit("thinking", text="I need to scan the repository, build the dependency graph, then trace the impact of this change.")
+
+        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
         trace["steps"].append({"skill": "discover_repository"})
         self._get_discovered_files()
+        self._emit("tool_result", name="discover_repository",
+                   result=f"Found {len(self._context.get('discovered_files', []))} files", latency=0.1)
 
+        self._emit("thinking", text="Repository scanned. Now building the dependency graph from imports and references.")
+        self._emit("tool_call", name="analyze_dependencies", input={})
         trace["steps"].append({"skill": "analyze_dependencies"})
         deps = self._get_dependencies()
+        self._emit("tool_result", name="analyze_dependencies",
+                   result=f"{deps.get('summary', {}).get('total_nodes', 0)} nodes, {deps.get('summary', {}).get('total_edges', 0)} edges", latency=0.1)
 
+        self._emit("thinking", text="Dependency graph built. Now tracing impact through affected files.")
+        self._emit("tool_call", name="analyze_impact", input={"change_description": task_input.get("change_description", "")})
         trace["steps"].append({"skill": "analyze_impact"})
         result = analyze_impact(
             task_input.get("change_description", ""),
@@ -448,16 +532,30 @@ class AgentRunner:
             deps.get("nodes", []),
             self.project_seed,
         )
+        self._emit("tool_result", name="analyze_impact",
+                   result=f"Risk: {result.get('risk_level', '?')}, {result.get('total_affected_count', 0)} affected", latency=0.1)
+
         result["agent_key"] = "impact-analysis-agent"
         return result
 
     def _demo_regression(self, task_input: dict, trace: dict) -> dict:
+        self._emit("thinking", text="I'll discover the repo, build dependencies, analyze impact, then select and run regression tests.")
+
+        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
         trace["steps"].append({"skill": "discover_repository"})
         files = self._get_discovered_files()
+        self._emit("tool_result", name="discover_repository",
+                   result=f"Found {len(files)} files", latency=0.1)
 
+        self._emit("thinking", text="Building dependency graph to understand what's connected.")
+        self._emit("tool_call", name="analyze_dependencies", input={})
         trace["steps"].append({"skill": "analyze_dependencies"})
         deps = self._get_dependencies()
+        self._emit("tool_result", name="analyze_dependencies",
+                   result=f"{deps.get('summary', {}).get('total_nodes', 0)} nodes", latency=0.1)
 
+        self._emit("thinking", text="Tracing impact of the change through the dependency graph.")
+        self._emit("tool_call", name="analyze_impact", input={"change_description": task_input.get("change_description", "")})
         trace["steps"].append({"skill": "analyze_impact"})
         impact = analyze_impact(
             task_input.get("change_description", ""),
@@ -466,16 +564,27 @@ class AgentRunner:
             deps.get("nodes", []),
             self.project_seed,
         )
+        self._emit("tool_result", name="analyze_impact",
+                   result=f"Risk: {impact.get('risk_level', '?')}, {impact.get('total_affected_count', 0)} affected", latency=0.1)
 
+        self._emit("thinking", text="Impact identified. Selecting the minimal sufficient test set to cover affected entities.")
+        self._emit("tool_call", name="select_tests", input={"affected_count": impact.get("total_affected_count", 0)})
         trace["steps"].append({"skill": "select_tests"})
         selection = select_tests(impact, files, self.test_scenarios)
+        self._emit("tool_result", name="select_tests",
+                   result=f"Selected {selection.get('total_selected', 0)} tests, coverage {selection.get('coverage_ratio', 0):.0%}", latency=0.1)
 
+        self._emit("thinking", text=f"Running {selection.get('total_selected', 0)} selected tests against the change.")
+        self._emit("tool_call", name="execute_tests", input={"test_count": selection.get("total_selected", 0)})
         trace["steps"].append({"skill": "execute_tests"})
         execution = execute_tests(
             selection["selected_tests"],
             task_input.get("change_id", ""),
             self.test_scenarios,
         )
+        summary = execution.get("summary", {})
+        self._emit("tool_result", name="execute_tests",
+                   result=f"{summary.get('passed', 0)} passed, {summary.get('failed', 0)} failed → {execution.get('overall_status', '?')}", latency=0.1)
 
         return {
             "agent_key": "regression-agent",
@@ -486,11 +595,20 @@ class AgentRunner:
         }
 
     def _demo_data_quality(self, task_input: dict, trace: dict) -> dict:
+        self._emit("thinking", text="I'll scan the repository for data assets, then profile schemas and quality indicators.")
+
+        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
         trace["steps"].append({"skill": "discover_repository"})
         files = self._get_discovered_files()
+        self._emit("tool_result", name="discover_repository",
+                   result=f"Found {len(files)} files", latency=0.1)
 
+        self._emit("thinking", text="Profiling data assets — examining schemas, columns, and quality checks.")
+        self._emit("tool_call", name="profile_data_assets", input={})
         trace["steps"].append({"skill": "profile_data_assets"})
         profiles = profile_data_assets(self.repository_root, files, self.project_seed)
+        self._emit("tool_result", name="profile_data_assets",
+                   result=f"{len(profiles.get('profiles', []))} assets profiled", latency=0.1)
 
         return {
             "agent_key": "data-quality-agent",
@@ -498,9 +616,15 @@ class AgentRunner:
         }
 
     def _demo_data_model(self, task_input: dict, trace: dict) -> dict:
+        self._emit("thinking", text="I'll discover the repository, then profile data assets to build the logical model.")
+
+        self._emit("tool_call", name="discover_repository", input={"repository_root": self.repository_root})
         trace["steps"].append({"skill": "discover_repository"})
         files = self._get_discovered_files()
+        self._emit("tool_result", name="discover_repository",
+                   result=f"Found {len(files)} files", latency=0.1)
 
+        self._emit("tool_call", name="profile_data_assets", input={})
         trace["steps"].append({"skill": "profile_data_assets"})
         profiles = profile_data_assets(self.repository_root, files, self.project_seed)
 
@@ -522,11 +646,20 @@ class AgentRunner:
         }
 
     def _demo_delivery_compliance(self, task_input: dict, trace: dict) -> dict:
+        self._emit("thinking", text="I need to discover the delivery process, validate checklists, assess gate readiness, and verify evidence.")
+
+        self._emit("tool_call", name="discover_repository", input={})
         trace["steps"].append({"skill": "discover_repository"})
         files = self._get_discovered_files()
+        self._emit("tool_result", name="discover_repository",
+                   result=f"Found {len(files)} files", latency=0.1)
 
+        self._emit("thinking", text="Discovering delivery process — phases, gates, and checklists.")
+        self._emit("tool_call", name="discover_delivery_process", input={})
         trace["steps"].append({"skill": "discover_delivery_process"})
         process = discover_delivery_process(self.repository_root, files, self.project_seed)
+        self._emit("tool_result", name="discover_delivery_process",
+                   result=f"{len(process.get('phases', []))} phases found", latency=0.1)
 
         evidence = task_input.get("evidence", [])
         checklist_items = process.get("checklists", [])
@@ -538,10 +671,16 @@ class AgentRunner:
                 {"name": "Security assessment complete", "required": True},
             ]
 
+        self._emit("thinking", text=f"Validating {len(checklist_items)} checklist items against {len(evidence)} evidence items.")
+        self._emit("tool_call", name="validate_checklist", input={"items": len(checklist_items)})
         trace["steps"].append({"skill": "validate_checklist"})
         checklist_result = validate_checklist(checklist_items, evidence)
+        self._emit("tool_result", name="validate_checklist",
+                   result=f"Validated {len(checklist_items)} items", latency=0.1)
 
         gate_name = task_input.get("gate_name", "Release Readiness Gate")
+        self._emit("thinking", text=f"Assessing gate readiness for: {gate_name}")
+        self._emit("tool_call", name="assess_gate_readiness", input={"gate": gate_name})
         trace["steps"].append({"skill": "assess_gate_readiness"})
         gate_result = assess_gate_readiness(
             gate_name,
@@ -549,9 +688,14 @@ class AgentRunner:
             task_input.get("test_result"),
             task_input.get("impact_result"),
         )
+        self._emit("tool_result", name="assess_gate_readiness",
+                   result=f"Gate: {'READY' if gate_result.get('ready') else 'BLOCKED'}", latency=0.1)
 
+        self._emit("tool_call", name="validate_evidence", input={"evidence_count": len(evidence)})
         trace["steps"].append({"skill": "validate_evidence"})
         ev_result = validate_evidence(evidence)
+        self._emit("tool_result", name="validate_evidence",
+                   result=f"Validated {len(evidence)} evidence items", latency=0.1)
 
         return {
             "agent_key": "delivery-compliance-agent",
