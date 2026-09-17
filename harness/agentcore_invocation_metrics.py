@@ -16,21 +16,25 @@ CloudWatch adapter:
     dashboard reflects this project's actual invocations in real time,
     independent of CloudWatch's delay.
 
-Pricing is a placeholder estimate (see PRICE_PER_1K_*) — not a billing
-source of truth. AWS Cost Explorer / Bedrock invocation logs remain the
-source of record for real spend; this exists to give operators a live
-order-of-magnitude signal while a project run is in flight.
+Cost is priced from real, live AWS Price List API rates
+(harness/bedrock_pricing.py), applied to these real token counts, for
+lanes actually backed by an AgentCore invocation. There is no hardcoded
+price table here any more — a lane whose usage can't be confidently
+priced (DEMO's synthetic tokens, GitHub Copilot's char-count heuristic, or
+an AgentCore lane whose live pricing lookup failed) reports its cost as
+unavailable rather than a guessed number; see lane_snapshot()'s
+`cost_available` field. AWS Cost Explorer / Bedrock invocation logs remain
+the source of record for actual billed spend — it cannot be scoped to a
+single lane, so it isn't used here.
 """
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Dict
+from typing import Dict, Optional
 
-# Approximate blended Claude Sonnet-class pricing (USD per 1K tokens).
-PRICE_PER_1K_INPUT_USD = 0.003
-PRICE_PER_1K_OUTPUT_USD = 0.015
+from harness.bedrock_pricing import BedrockModelPricing, get_bedrock_model_pricing
 
 
 @dataclass
@@ -42,14 +46,6 @@ class TokenUsage:
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
 
-    @property
-    def estimated_cost_usd(self) -> float:
-        return round(
-            self.input_tokens / 1000 * PRICE_PER_1K_INPUT_USD
-            + self.output_tokens / 1000 * PRICE_PER_1K_OUTPUT_USD,
-            4,
-        )
-
     def __add__(self, other: "TokenUsage") -> "TokenUsage":
         return TokenUsage(self.input_tokens + other.input_tokens, self.output_tokens + other.output_tokens)
 
@@ -60,9 +56,20 @@ class _LaneMetrics:
     usage: TokenUsage = field(default_factory=TokenUsage)
     invocation_count: int = 0
     source: str = "DEMO"  # "AGENTCORE" | "GITHUB_COPILOT" | "DEMO" — how this usage was derived
+    pricing: Optional[BedrockModelPricing] = None
 
     def elapsed_seconds(self) -> float:
         return time.monotonic() - self.started_at
+
+    def cost(self) -> "tuple[Optional[float], bool]":
+        if self.pricing is None:
+            return None, False
+        cost = round(
+            self.usage.input_tokens / 1000 * self.pricing.input_price_per_1k_usd
+            + self.usage.output_tokens / 1000 * self.pricing.output_price_per_1k_usd,
+            4,
+        )
+        return cost, True
 
 
 class InvocationMetricsTracker:
@@ -73,9 +80,10 @@ class InvocationMetricsTracker:
         self._project_started_at = time.monotonic()
         self._lanes: Dict[str, _LaneMetrics] = {}
 
-    def start_lane(self, lane_key: str, source: str = "DEMO") -> None:
+    def start_lane(self, lane_key: str, source: str = "DEMO", model_id: str = "") -> None:
+        pricing = get_bedrock_model_pricing(model_id) if source == "AGENTCORE" and model_id else None
         with self._lock:
-            self._lanes.setdefault(lane_key, _LaneMetrics(source=source))
+            self._lanes.setdefault(lane_key, _LaneMetrics(source=source, pricing=pricing))
 
     def record(self, lane_key: str, usage: TokenUsage) -> None:
         with self._lock:
@@ -87,10 +95,15 @@ class InvocationMetricsTracker:
         with self._lock:
             lane = self._lanes.get(lane_key)
             if lane is None:
-                return {"elapsed_seconds": 0.0, "token_cost_usd": 0.0, "total_tokens": 0, "invocation_count": 0, "source": "PENDING"}
+                return {
+                    "elapsed_seconds": 0.0, "token_cost_usd": None, "cost_available": False,
+                    "total_tokens": 0, "invocation_count": 0, "source": "PENDING",
+                }
+            cost, available = lane.cost()
             return {
                 "elapsed_seconds": round(lane.elapsed_seconds(), 1),
-                "token_cost_usd": lane.usage.estimated_cost_usd,
+                "token_cost_usd": cost,
+                "cost_available": available,
                 "total_tokens": lane.usage.total_tokens,
                 "invocation_count": lane.invocation_count,
                 "source": lane.source,
@@ -99,10 +112,24 @@ class InvocationMetricsTracker:
     def project_snapshot(self) -> dict:
         with self._lock:
             total_usage = TokenUsage()
+            total_cost = 0.0
+            all_available = True
+            any_usage = False
             for lane in self._lanes.values():
                 total_usage = total_usage + lane.usage
+                if lane.usage.total_tokens <= 0:
+                    continue
+                any_usage = True
+                cost, available = lane.cost()
+                if available:
+                    total_cost += cost
+                else:
+                    all_available = False
+
+            cost_available = any_usage and all_available
             return {
                 "elapsed_seconds": round(time.monotonic() - self._project_started_at, 1),
-                "token_cost_usd": total_usage.estimated_cost_usd,
+                "token_cost_usd": round(total_cost, 4) if cost_available else None,
+                "cost_available": cost_available,
                 "total_tokens": total_usage.total_tokens,
             }

@@ -11,8 +11,10 @@ from pathlib import Path
 root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
+import harness.agentcore_invocation_metrics as agentcore_invocation_metrics
 from domain.project import LaneStatus, WorkProductStatus
 from harness.agentcore_invocation_metrics import InvocationMetricsTracker, TokenUsage
+from harness.bedrock_pricing import BedrockModelPricing
 from harness.bus import EventBus
 from harness.project_dashboard import ProjectDashboardSession
 
@@ -44,7 +46,10 @@ def test_demo_dashboard_matches_reference_snapshot_shape():
         assert snap["work_products_total"] == 28  # 7 + 8 + 7 + 6, matching the four lane definitions
         assert snap["work_products_done"] > 0
         assert snap["total_tokens"] > 0
-        assert snap["token_cost_usd"] > 0
+        # DEMO tokens are synthetic (no real invocation to price), so cost
+        # is explicitly unavailable rather than a heuristic dollar figure.
+        assert snap["cost_available"] is False
+        assert snap["token_cost_usd"] is None
 
         # resolve both pending reviews so the background _await_review tasks don't outlive the test
         assert await session.review("release-lead", "deployment-checklist", approve=True, version="v1.0")
@@ -143,9 +148,20 @@ def test_live_lane_failure_is_isolated_per_lane():
     assert all("boom" in l["current_activity"] for l in snap["lanes"])
 
 
-def test_invocation_metrics_tracker_aggregates_across_lanes():
+def test_invocation_metrics_tracker_aggregates_across_lanes(monkeypatch):
+    """An AgentCore lane with real, live-fetched pricing gets a real
+    dollar figure computed from its real token counts; a GitHub Copilot
+    lane (heuristic tokens, no real invocation to price) reports its own
+    cost as unavailable, and that in turn makes the project-level total
+    unavailable too — a mixed run must never silently omit a lane's
+    unknown spend and claim a clean number."""
+    monkeypatch.setattr(
+        agentcore_invocation_metrics, "get_bedrock_model_pricing",
+        lambda model_id: BedrockModelPricing(model_id, input_price_per_1k_usd=0.01, output_price_per_1k_usd=0.02),
+    )
+
     tracker = InvocationMetricsTracker()
-    tracker.start_lane("lane-a", source="AGENTCORE")
+    tracker.start_lane("lane-a", source="AGENTCORE", model_id="fake-model")
     tracker.record("lane-a", TokenUsage(input_tokens=1000, output_tokens=500))
     tracker.record("lane-a", TokenUsage(input_tokens=200, output_tokens=100))
     tracker.start_lane("lane-b", source="GITHUB_COPILOT")
@@ -155,16 +171,51 @@ def test_invocation_metrics_tracker_aggregates_across_lanes():
     assert lane_a["total_tokens"] == 1800
     assert lane_a["invocation_count"] == 2
     assert lane_a["source"] == "AGENTCORE"
+    assert lane_a["cost_available"] is True
+    assert lane_a["token_cost_usd"] == 0.024  # 1200/1000*0.01 + 600/1000*0.02
+
+    lane_b = tracker.lane_snapshot("lane-b")
+    assert lane_b["cost_available"] is False
+    assert lane_b["token_cost_usd"] is None
 
     project = tracker.project_snapshot()
     assert project["total_tokens"] == 1800 + 600
-    assert project["token_cost_usd"] > 0
+    assert project["cost_available"] is False
+    assert project["token_cost_usd"] is None
+
+
+def test_demo_lane_cost_is_unavailable():
+    tracker = InvocationMetricsTracker()
+    tracker.start_lane("x", source="DEMO")
+    tracker.record("x", TokenUsage(input_tokens=9000, output_tokens=6000))
+
+    snap = tracker.lane_snapshot("x")
+    assert snap["cost_available"] is False
+    assert snap["token_cost_usd"] is None
+    assert snap["total_tokens"] == 15000  # tokens are still shown, only cost is gated
+
+
+def test_agentcore_lane_with_failed_pricing_fetch_is_unavailable(monkeypatch):
+    """A failed live pricing lookup must never silently fall back to the
+    old hardcoded-constant estimate."""
+    monkeypatch.setattr(agentcore_invocation_metrics, "get_bedrock_model_pricing", lambda model_id: None)
+
+    tracker = InvocationMetricsTracker()
+    tracker.start_lane("lane-a", source="AGENTCORE", model_id="unknown-model")
+    tracker.record("lane-a", TokenUsage(input_tokens=1000, output_tokens=500))
+
+    snap = tracker.lane_snapshot("lane-a")
+    assert snap["cost_available"] is False
+    assert snap["token_cost_usd"] is None
 
 
 def test_unknown_lane_metrics_snapshot_is_zeroed_not_missing():
     tracker = InvocationMetricsTracker()
     snap = tracker.lane_snapshot("never-started")
-    assert snap == {"elapsed_seconds": 0.0, "token_cost_usd": 0.0, "total_tokens": 0, "invocation_count": 0, "source": "PENDING"}
+    assert snap == {
+        "elapsed_seconds": 0.0, "token_cost_usd": None, "cost_available": False,
+        "total_tokens": 0, "invocation_count": 0, "source": "PENDING",
+    }
 
 
 def test_dashboard_session_loads_from_project_overrides():
