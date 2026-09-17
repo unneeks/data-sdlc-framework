@@ -1,2 +1,5 @@
-bedrock-agentcore>=0.1.0
+# Pinned to the latest verified-working release (checked against PyPI at
+# the time of this change) rather than the original >=0.1.0 floor, which
+# predates most of this SDK's current runtime/memory/identity surface.
+bedrock-agentcore>=1.23.1
 pydantic>=2.0.0
