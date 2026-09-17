@@ -181,6 +181,17 @@ PERMISSIONS_POLICY = {
             "Action": ["bedrock-agentcore:GetResourceApiKey"],
             "Resource": "*",
         },
+        {
+            # Needed by the code-sync feature (docs/adr/0008): agents/skills/code_sync.py
+            # reads/writes the repo baseline, event log, and published documents. By
+            # default this reuses the knowledgebase bucket (agentcore-kb-*) — see
+            # harness/repo_sync_config.py's fallback. agents/conventions/provisioner.py's
+            # role policy already had this statement; setup_agentcore.py's did not.
+            "Sid": "RepoSyncS3",
+            "Effect": "Allow",
+            "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:GetBucketLocation"],
+            "Resource": ["arn:aws:s3:::agentcore-kb-*", "arn:aws:s3:::agentcore-kb-*/*"],
+        },
     ],
 }
 

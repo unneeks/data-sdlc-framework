@@ -661,5 +661,22 @@ def save_convention_config(
             "status": provision_result.knowledgebase.get("status", "UNKNOWN"),
         }
 
+    # repo_sync (docs/adr/0008): preserve whatever's already configured;
+    # only fill in defaults on first write. Left with an empty bucket_name
+    # by default — harness/repo_sync_config.py falls back to the
+    # knowledgebase bucket above at runtime if this stays unset, but we
+    # don't write that fallback here so the two config values don't drift
+    # out of sync silently if the KB bucket is later reprovisioned.
+    existing_repo_sync = existing.get("repo_sync", {})
+    config["repo_sync"] = {
+        "bucket_name": existing_repo_sync.get("bucket_name", ""),
+        "region": existing_repo_sync.get("region", ""),
+        "code_prefix": existing_repo_sync.get("code_prefix", "repo-sync/code"),
+        "events_prefix": existing_repo_sync.get("events_prefix", "repo-sync/events"),
+        "docs_prefix": existing_repo_sync.get("docs_prefix", "repo-sync/docs"),
+        "local_docs_dir": existing_repo_sync.get("local_docs_dir", ".agentcore/synced-documents"),
+        "status": existing_repo_sync.get("status", "NOT_CONFIGURED"),
+    }
+
     config_path.write_text(json.dumps(config, indent=2))
     return config_path
