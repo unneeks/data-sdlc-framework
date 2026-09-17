@@ -656,12 +656,12 @@ export async function fetchLiveMetrics(agentId: string): Promise<AgentCoreMetric
 }
 
 export async function startLiveSession(
-  agentId: string, backend: 'AGENTCORE' | 'GITHUB_COPILOT', live: boolean, prompt: string,
+  agentId: string, backend: 'AGENTCORE' | 'GITHUB_COPILOT', live: boolean, prompt: string, harnessArn?: string,
 ): Promise<{ session_id: string }> {
   const res = await fetch(`${API_BASE}/live/session/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agent_id: agentId, backend, live, prompt }),
+    body: JSON.stringify({ agent_id: agentId, backend, live, prompt, harness_arn: harnessArn }),
   });
   return await res.json();
 }

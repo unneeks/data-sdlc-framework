@@ -121,7 +121,10 @@ export const AgentCoreConnectionTester: React.FC = () => {
     setInvokeFinalText(null);
     setInvokePendingCalls([]);
     invokeCursorRef.current = 0;
-    const { session_id } = await startLiveSession(selectedHarnessId, 'AGENTCORE', invokeLive, invokePrompt);
+    const selected = harnesses.find((h) => h.id === selectedHarnessId);
+    const { session_id } = await startLiveSession(
+      selectedHarnessId, 'AGENTCORE', invokeLive, invokePrompt, selected?.harness_arn,
+    );
     setInvokeSessionId(session_id);
     setInvokeStatus('RUNNING');
   };
@@ -132,7 +135,10 @@ export const AgentCoreConnectionTester: React.FC = () => {
     setCallbackFinalText(null);
     handledCallIdsRef.current = new Set();
     callbackCursorRef.current = 0;
-    const { session_id } = await startLiveSession(selectedHarnessId, 'AGENTCORE', invokeLive, LOCAL_CALLBACK_PROMPT);
+    const selected = harnesses.find((h) => h.id === selectedHarnessId);
+    const { session_id } = await startLiveSession(
+      selectedHarnessId, 'AGENTCORE', invokeLive, LOCAL_CALLBACK_PROMPT, selected?.harness_arn,
+    );
     setCallbackSessionId(session_id);
     setCallbackStatus('RUNNING');
   };
