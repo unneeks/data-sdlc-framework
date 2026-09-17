@@ -5,6 +5,19 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-17
+
+### Added
+
+- **Project-specific dashboard datastore** — the Project Dashboard's phases/lanes/artifacts, previously a single hardcoded Python template shared by every session, are now seeded and persisted per project at onboarding (see `docs/adr/0010-project-specific-dashboard-datastore.md`):
+  - `harness/project_store.py` — `create_project()`/`load_project()`, one JSON file per project at `data/projects/{project_id}.json` (gitignored, runtime-created), seeded from `harness/project_dashboard.py`'s `DEFAULT_PHASES`/`DEFAULT_PHASE_LABELS`/`DEFAULT_LANE_DEFINITIONS` (renamed from `PHASES`/`PHASE_LABELS`/`LANE_DEFINITIONS`, which remain the standalone/no-project DEMO template unchanged).
+  - `domain/project.py`: new `ProjectRecord` model.
+  - New API surface: `apps/api/project_routes.py` — `POST /api/projects`, `GET /api/projects/{project_id}`.
+  - `apps/api/dashboard_routes.py`'s `POST /api/dashboard/start` accepts an optional `project_id`; when present, the session loads that project's persisted title/phases/lanes instead of the defaults (404 on an unknown id).
+  - `ProjectDashboardSession` now accepts optional `title`/`phases`/`phase_labels`/`lane_definitions` overrides; a persisted project's lanes carry no DEMO `script`, so DEMO mode on one simply leaves every work product `NOT_STARTED` instead of crashing.
+  - Frontend: accepting a delivery type (or picking one from the catalog) in the "Delivery Intent" onboarding screen now calls `POST /api/projects` and navigates straight to the dashboard with the real project title, instead of discarding the choice; "Project Discovery" is untouched in this pass.
+  - 9 new tests across `tests/test_project_store.py` and `tests/test_dashboard_routes.py`, plus 1 new test in `tests/test_project_dashboard.py`.
+
 ## [0.6.0] - 2026-09-17
 
 ### Added

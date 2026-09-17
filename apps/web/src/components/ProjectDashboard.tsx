@@ -48,7 +48,12 @@ function timeAgo(iso: string | null): string {
   return mins < 1 ? 'just now' : `${mins}m ago`;
 }
 
-export const ProjectDashboard: React.FC = () => {
+interface ProjectDashboardProps {
+  projectId?: string | null;
+  projectTitle?: string | null;
+}
+
+export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ projectId, projectTitle }) => {
   const [live, setLive] = useState(false);
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -70,7 +75,7 @@ export const ProjectDashboard: React.FC = () => {
   }, [sessionId]);
 
   const handleStart = async () => {
-    const { session_id } = await startDashboard(live);
+    const { session_id } = await startDashboard(live, projectTitle || undefined, projectId || undefined);
     setSessionId(session_id);
   };
 
@@ -100,7 +105,7 @@ export const ProjectDashboard: React.FC = () => {
             <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-500/10 text-blue-300 text-xs font-bold border border-blue-500/20 uppercase tracking-widest">
               <BarChart3 className="w-3.5 h-3.5" /><span>Project Dashboard</span>
             </div>
-            <h2 className="text-3xl font-extrabold text-white tracking-tight">Customer Payments Data Product</h2>
+            <h2 className="text-3xl font-extrabold text-white tracking-tight">{projectTitle || 'Customer Payments Data Product'}</h2>
             <p className="text-slate-400 text-sm max-w-2xl">
               End-to-end SDLC supported by AI agents — Data Analyst, Data Engineer, Test Engineer and
               Release Lead run concurrently, producing work products through Requirements, Design,

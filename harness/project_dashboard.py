@@ -24,7 +24,7 @@ Reuses the same building blocks as the single-agent Live Agent Orchestrator
 DEMO mode is a fully scripted, offline simulation matching the reference
 screenshot's lane names, work product names, and approval gates — no
 network calls, deterministic. LIVE mode maps each lane to a best-effort
-real backend agent (see LANE_DEFINITIONS) and runs one real
+real backend agent (see DEFAULT_LANE_DEFINITIONS) and runs one real
 `LiveAgentSession` per lane; a lane whose mapped agent isn't provisioned or
 reachable fails that lane only (status FAILED, reason shown as its current
 activity), it does not take down the rest of the dashboard.
@@ -53,8 +53,14 @@ logger = logging.getLogger(__name__)
 # are the shorter product-facing names the reference screenshot uses
 # ("Build" for Development, "Test" for Testing); the underlying keys stay
 # canonical so this data lines up with the rest of the metamodel.
-PHASES = ["requirements", "design", "development", "testing", "release"]
-PHASE_LABELS = {
+#
+# These are the DEFAULT template: the standalone/no-project DEMO dashboard
+# (navigated to directly, without onboarding) uses them as-is; a project
+# created at onboarding (harness/project_store.py) seeds its own persisted
+# phases/lanes from this same template instead, so this module stays the
+# one canonical source either way.
+DEFAULT_PHASES = ["requirements", "design", "development", "testing", "release"]
+DEFAULT_PHASE_LABELS = {
     "requirements": "Requirements", "design": "Design", "development": "Build",
     "testing": "Test", "release": "Release",
 }
@@ -63,8 +69,11 @@ PHASE_LABELS = {
 # DEMO simulation (work_product_key, delay_seconds, status, version). A key
 # with no script entry stays NOT_STARTED for the run — this dashboard depicts
 # an in-flight project (status "In Progress"), not a finished one, matching
-# the reference screenshot.
-LANE_DEFINITIONS: List[Dict[str, Any]] = [
+# the reference screenshot. A persisted project's lane definitions (seeded
+# from this template by harness/project_store.py) drop `script` entirely —
+# a freshly onboarded project has produced nothing yet, so DEMO mode on one
+# just leaves every work product NOT_STARTED (see ProjectLane._run_demo).
+DEFAULT_LANE_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "key": "data-analyst",
         "name": "Data Analyst Agent",
@@ -221,14 +230,15 @@ class ProjectLane:
 
     async def _run_demo(self) -> None:
         self._emit("LANE_STARTED", mode="DEMO")
-        for wp_key, delay_s, status, version in self.definition["script"]:
+        script = self.definition.get("script", [])
+        for wp_key, delay_s, status, version in script:
             await asyncio.sleep(delay_s / 10)  # compress the schedule for a responsive demo
             wp = self.work_products[wp_key]
             wp.status = WorkProductStatus(status)
             wp.version = version
             wp.touch()
             self._metrics.record(self.key, _DEMO_TOKENS_PER_TRANSITION)
-            is_last_scripted = wp_key == self.definition["script"][-1][0]
+            is_last_scripted = wp_key == script[-1][0]
 
             if wp.status == WorkProductStatus.AWAITING_REVIEW:
                 wp.requested_at = wp.updated_at
@@ -327,17 +337,22 @@ class ProjectDashboardSession:
     def __init__(
         self, session_id: str, live: bool, bus: EventBus, agent_runner: Any, github_backend: Any,
         title: str = "Customer Payments Data Product",
+        phases: Optional[List[str]] = None,
+        phase_labels: Optional[Dict[str, str]] = None,
+        lane_definitions: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         self.session_id = session_id
         self.live = live
         self.title = title
+        self.phases = phases or DEFAULT_PHASES
+        self.phase_labels = phase_labels or DEFAULT_PHASE_LABELS
         self.started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         self._bus = bus
         self._agent_runner = agent_runner
         self._github_backend = github_backend
         self.metrics = InvocationMetricsTracker()
         self.lanes: Dict[str, ProjectLane] = {
-            d["key"]: ProjectLane(d, bus, self.metrics) for d in LANE_DEFINITIONS
+            d["key"]: ProjectLane(d, bus, self.metrics) for d in (lane_definitions or DEFAULT_LANE_DEFINITIONS)
         }
 
     async def run(self) -> None:
@@ -360,7 +375,7 @@ class ProjectDashboardSession:
         return await self._bus.resolve_callback(call_id, event)
 
     def snapshot(self) -> dict:
-        phase_counts = {p: {"done": 0, "total": 0} for p in PHASES}
+        phase_counts = {p: {"done": 0, "total": 0} for p in self.phases}
         lanes_out = []
         recent_activity: List[dict] = []
         human_attention: List[dict] = []
@@ -413,8 +428,8 @@ class ProjectDashboardSession:
             "agents_active": agents_running,
             "agents_total": len(self.lanes),
             "phases": [
-                {"key": p, "label": PHASE_LABELS[p], "done": phase_counts[p]["done"], "total": phase_counts[p]["total"]}
-                for p in PHASES
+                {"key": p, "label": self.phase_labels[p], "done": phase_counts[p]["done"], "total": phase_counts[p]["total"]}
+                for p in self.phases
             ],
             "lanes": lanes_out,
             "recent_activity": recent_activity[-30:],

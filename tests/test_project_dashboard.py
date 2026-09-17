@@ -167,6 +167,45 @@ def test_unknown_lane_metrics_snapshot_is_zeroed_not_missing():
     assert snap == {"elapsed_seconds": 0.0, "token_cost_usd": 0.0, "total_tokens": 0, "invocation_count": 0, "source": "PENDING"}
 
 
+def test_dashboard_session_loads_from_project_overrides():
+    """A persisted project's phases/lanes (no `script` key, unlike the
+    DEMO template) should drive the session instead of the defaults, and
+    DEMO mode on it should leave every work product NOT_STARTED rather
+    than crashing on the missing `script` field."""
+    bus = EventBus()
+    phases = ["intake"]
+    phase_labels = {"intake": "Intake"}
+    lane_definitions = [
+        {
+            "key": "solo-lane", "name": "Solo Lane", "role": "Do the one thing", "color": "blue",
+            "agentcore_agent_id": "", "copilot_agent_id": "", "prompt": "",
+            "work_products": [{"key": "only-wp", "name": "Only Work Product", "phase": "intake"}],
+        },
+    ]
+    session = ProjectDashboardSession(
+        session_id="proj1", live=False, bus=bus, agent_runner=None, github_backend=None,
+        title="A Real Project", phases=phases, phase_labels=phase_labels, lane_definitions=lane_definitions,
+    )
+
+    async def scenario():
+        run_task = asyncio.create_task(session.run())
+        await asyncio.sleep(0.05)
+        run_task.cancel()
+        try:
+            await run_task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(scenario())
+
+    snap = session.snapshot()
+    assert snap["title"] == "A Real Project"
+    assert snap["phases"] == [{"key": "intake", "label": "Intake", "done": 0, "total": 1}]
+    lane = snap["lanes"][0]
+    assert lane["key"] == "solo-lane"
+    assert lane["work_products"][0]["status"] == "NOT_STARTED"
+
+
 if __name__ == "__main__":
     test_demo_dashboard_matches_reference_snapshot_shape()
     test_reviewing_a_gated_work_product_unblocks_its_lane()
@@ -175,4 +214,5 @@ if __name__ == "__main__":
     test_live_lane_failure_is_isolated_per_lane()
     test_invocation_metrics_tracker_aggregates_across_lanes()
     test_unknown_lane_metrics_snapshot_is_zeroed_not_missing()
+    test_dashboard_session_loads_from_project_overrides()
     print("All project dashboard unit tests passed successfully!")
