@@ -247,12 +247,35 @@ def run_connection_test(settings: ConnectionSettings) -> dict:
     try:
         control = session.client("bedrock-agentcore-control", region_name=settings.region or None)
         response = control.list_harnesses(maxResults=10)
+        harnesses = response.get("harnesses", [])
+        # Real ARNs from AWS's own response, never a hardcoded/cached value —
+        # a harness's ARN only exists once AWS has actually created it.
+        harness_arns = [
+            h.get("harnessArn") or h.get("arn") or h.get("harness_arn")
+            for h in harnesses
+            if h.get("harnessArn") or h.get("arn") or h.get("harness_arn")
+        ]
         result["agentcore"] = {
             "available": True,
-            "harness_count": len(response.get("harnesses", [])),
+            "harness_count": len(harnesses),
             "region": settings.region,
+            "harness_arns": harness_arns,
         }
     except Exception as exc:  # noqa: BLE001
         result["agentcore"] = {"available": False, "reason": str(exc)}
 
     return result
+
+
+def list_harnesses(settings: ConnectionSettings, max_results: int = 50) -> dict:
+    """Live-list AgentCore harnesses via bedrock-agentcore-control — the
+    source of truth for "what harnesses actually exist right now",
+    reachability permitting. Used by any caller needing the real, current
+    list (e.g. a harness picker) rather than a locally cached registry
+    snapshot from whenever setup_agentcore.py/the provisioner last ran."""
+    try:
+        client = build_boto3_client("bedrock-agentcore-control", default_region=settings.region)
+        response = client.list_harnesses(maxResults=max_results)
+        return {"available": True, "harnesses": response.get("harnesses", [])}
+    except Exception as exc:  # noqa: BLE001 - report, never crash the caller
+        return {"available": False, "reason": str(exc), "harnesses": []}

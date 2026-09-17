@@ -14,30 +14,38 @@ from domain.orchestration import SystemMode
 from harness.connection_tester import ConnectionSettings
 
 
-def test_demo_mode_reports_unchecked(monkeypatch):
+def test_demo_mode_still_runs_the_live_test(monkeypatch):
+    """Connectivity is a fact about this machine's settings, not about
+    whether the rest of the app is currently simulating invocations — the
+    check always runs live, in DEMO mode too."""
     monkeypatch.setattr(harness_config, "mode", SystemMode.DEMO)
     monkeypatch.setattr("apps.api.main.load_settings", lambda: ConnectionSettings(region="ap-southeast-2", project="p"))
-
-    def boom(settings):
-        raise AssertionError("run_connection_test should not run in DEMO mode")
-
-    monkeypatch.setattr("apps.api.main.run_connection_test", boom)
+    monkeypatch.setattr("apps.api.main.run_connection_test", lambda settings: {
+        "aws_identity": {"available": True},
+        "agentcore": {"available": True, "harness_count": 3, "harness_arns": ["arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/a"]},
+    })
 
     snapshot = _agentcore_connectivity_snapshot()
-    assert snapshot == {"checked": False, "reachable": None, "region": "ap-southeast-2", "project": "p", "reason": None}
+    assert snapshot == {
+        "checked": True, "reachable": True, "region": "ap-southeast-2", "project": "p",
+        "reason": None, "harness_count": 3, "sample_harness_arn": "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/a",
+    }
 
 
 def test_real_mode_reachable_when_both_checks_succeed(monkeypatch):
     monkeypatch.setattr(harness_config, "mode", SystemMode.REAL)
     monkeypatch.setattr("apps.api.main.load_settings", lambda: ConnectionSettings(region="ap-southeast-2", project="p"))
     monkeypatch.setattr("apps.api.main.run_connection_test", lambda settings: {
-        "aws_identity": {"available": True}, "agentcore": {"available": True},
+        "aws_identity": {"available": True},
+        "agentcore": {"available": True, "harness_count": 7, "harness_arns": ["arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/x", "arn:...:y"]},
     })
 
     snapshot = _agentcore_connectivity_snapshot()
     assert snapshot["checked"] is True
     assert snapshot["reachable"] is True
     assert snapshot["reason"] is None
+    assert snapshot["harness_count"] == 7
+    assert snapshot["sample_harness_arn"] == "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/x"
 
 
 def test_real_mode_unreachable_surfaces_aws_identity_reason(monkeypatch):
@@ -51,6 +59,8 @@ def test_real_mode_unreachable_surfaces_aws_identity_reason(monkeypatch):
     assert snapshot["checked"] is True
     assert snapshot["reachable"] is False
     assert snapshot["reason"] == "InvalidClientTokenId"
+    assert snapshot["harness_count"] is None
+    assert snapshot["sample_harness_arn"] is None
 
 
 def test_real_mode_unreachable_surfaces_agentcore_reason_when_aws_identity_ok(monkeypatch):

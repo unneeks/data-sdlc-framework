@@ -31,11 +31,11 @@ export default function App() {
   const [deliveryTypes, setDeliveryTypes] = useState<DeliveryType[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [harnessMode, setHarnessMode] = useState<string>('DEMO');
-  const [runtimeArn, setRuntimeArn] = useState<string>('');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectTitle, setProjectTitle] = useState<string | null>(null);
   const [agentcoreConnectivity, setAgentcoreConnectivity] = useState<{
     checked: boolean; reachable: boolean | null; region: string; project: string; reason: string | null;
+    harness_count: number | null; sample_harness_arn: string | null;
   } | null>(null);
   const [demoState, setDemoState] = useState({
     current_step: 1,
@@ -51,7 +51,6 @@ export default function App() {
     fetchAgents().then(setAgents);
     fetch(`${API_BASE}/status`).then(r => r.json()).then(data => {
       setHarnessMode(data.mode || 'DEMO');
-      setRuntimeArn(data.agentcore_runtime || '');
       setAgentcoreConnectivity(data.agentcore_connectivity || null);
     }).catch(() => {});
   }, []);
@@ -142,7 +141,12 @@ export default function App() {
               {connectionFailed
                 ? `AGENTCORE CONNECTION FAILED (${agentcoreConnectivity?.region}) — ${agentcoreConnectivity?.reason || 'check Connection Tester settings'}`
                 : harnessMode === 'REAL'
-                ? `AGENTCORE RUNTIME (${agentcoreConnectivity?.region || ''}) — ${runtimeArn}`
+                ? `AGENTCORE RUNTIME (${agentcoreConnectivity?.region || ''}) — ${
+                    agentcoreConnectivity?.sample_harness_arn
+                      || (agentcoreConnectivity?.harness_count != null
+                        ? `${agentcoreConnectivity.harness_count} harness(es) visible`
+                        : 'reachable')
+                  }`
                 : 'LOCAL DEMO MODE — responses served locally'}
             </span>
           </div>

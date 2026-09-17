@@ -561,6 +561,8 @@ export interface LiveAgent {
   backend: 'AGENTCORE' | 'GITHUB_COPILOT';
   live_ready: boolean;
   harness_status: string;
+  model_id?: string;
+  harness_arn?: string;
 }
 
 export interface LiveEvent {
