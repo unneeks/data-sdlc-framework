@@ -283,6 +283,20 @@
     <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
   </rdf:Property>
 
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#artifactInPhase">
+    <rdfs:label>artifact in phase</rdfs:label>
+    <rdfs:comment>The delivery phase a given artifact is produced within (a direct shortcut of the DeliveryTask/DeliveryActivity hop hasArtifact otherwise requires).</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
+  </rdf:Property>
+
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#producedByRole">
+    <rdfs:label>produced by role</rdfs:label>
+    <rdfs:comment>The delivery role (agent lane) responsible for producing this artifact.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
+    <rdfs:range rdf:resource="http://example.org/ontology/data-sdlc#DeliveryRole"/>
+  </rdf:Property>
+
   <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#hasRole">
     <rdfs:label>has role</rdfs:label>
     <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryPhase"/>
@@ -509,6 +523,13 @@
     <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#float"/>
   </rdf:Property>
 
+  <rdf:Property rdf:about="http://example.org/ontology/data-sdlc#reviewGate">
+    <rdfs:label>review gate</rdfs:label>
+    <rdfs:comment>Whether this artifact must pass a human approval gate before being marked complete.</rdfs:comment>
+    <rdfs:domain rdf:resource="http://example.org/ontology/data-sdlc#DeliveryArtifact"/>
+    <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#boolean"/>
+  </rdf:Property>
+
   <!-- ── Subclass Relationships ─────────────────────────────────────────── -->
 
   <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#DataAsset">
@@ -518,5 +539,366 @@
   <rdfs:Class rdf:about="http://example.org/ontology/data-sdlc#Pipeline">
     <rdfs:subClassOf rdf:resource="http://example.org/ontology/data-sdlc#LineageNode"/>
   </rdfs:Class>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       INDIVIDUALS — Delivery Twin instance data
+       Mirrors apps/web/src/data/metamodel.json's delivery_phases (10) and
+       delivery_artifacts (28) exactly, and the 4 lanes in
+       harness/project_dashboard.py's DEFAULT_LANE_DEFINITIONS as
+       DeliveryRole individuals. See data-sdlc.owl for the same instances
+       expressed with owl:NamedIndividual.
+       ═══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Delivery Phases (10, canonical order) -->
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_discovery">
+    <dsdlc:identifier>discovery</dsdlc:identifier>
+    <dsdlc:name>Discovery</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">1</dsdlc:sequence>
+    <dsdlc:description>Understand the business context, current state, and constraints before committing to a solution.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_requirements">
+    <dsdlc:identifier>requirements</dsdlc:identifier>
+    <dsdlc:name>Requirements</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">2</dsdlc:sequence>
+    <dsdlc:description>Capture and validate what the change must achieve, in testable, traceable form.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_architecture">
+    <dsdlc:identifier>architecture</dsdlc:identifier>
+    <dsdlc:name>Architecture</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">3</dsdlc:sequence>
+    <dsdlc:description>Assess feasibility and choose an architecture that satisfies the requirements and NFRs.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_design">
+    <dsdlc:identifier>design</dsdlc:identifier>
+    <dsdlc:name>Design</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">4</dsdlc:sequence>
+    <dsdlc:description>Produce the logical/technical design: data model, schema mapping, pipeline design.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_development">
+    <dsdlc:identifier>development</dsdlc:identifier>
+    <dsdlc:name>Development</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">5</dsdlc:sequence>
+    <dsdlc:description>Build the pipelines, models, and infrastructure the design calls for.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_testing">
+    <dsdlc:identifier>testing</dsdlc:identifier>
+    <dsdlc:name>Testing</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">6</dsdlc:sequence>
+    <dsdlc:description>Verify the build against the requirements: unit, integration, and reconciliation testing.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_release">
+    <dsdlc:identifier>release</dsdlc:identifier>
+    <dsdlc:name>Release</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">7</dsdlc:sequence>
+    <dsdlc:description>Prepare and execute the release: readiness assessment, deployment checklist, go/no-go.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_deployment">
+    <dsdlc:identifier>deployment</dsdlc:identifier>
+    <dsdlc:name>Deployment</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">8</dsdlc:sequence>
+    <dsdlc:description>Deploy the change to its target environment(s).</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_operations">
+    <dsdlc:identifier>operations</dsdlc:identifier>
+    <dsdlc:name>Operations</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">9</dsdlc:sequence>
+    <dsdlc:description>Operate the change in production: monitoring, incident response, support.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <dsdlc:DeliveryPhase rdf:about="http://example.org/ontology/data-sdlc#Phase_transitionToBau">
+    <dsdlc:identifier>transition-to-bau</dsdlc:identifier>
+    <dsdlc:name>Transition to BAU</dsdlc:name>
+    <dsdlc:sequence rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">10</dsdlc:sequence>
+    <dsdlc:description>Hand the change over to business-as-usual ownership and support.</dsdlc:description>
+  </dsdlc:DeliveryPhase>
+
+  <!-- Delivery Roles (4 lanes) -->
+
+  <dsdlc:DeliveryRole rdf:about="http://example.org/ontology/data-sdlc#Role_dataAnalyst">
+    <dsdlc:identifier>data-analyst</dsdlc:identifier>
+    <dsdlc:name>Data Analyst Agent</dsdlc:name>
+    <dsdlc:description>Elicit, analyse and document requirements.</dsdlc:description>
+  </dsdlc:DeliveryRole>
+
+  <dsdlc:DeliveryRole rdf:about="http://example.org/ontology/data-sdlc#Role_dataEngineer">
+    <dsdlc:identifier>data-engineer</dsdlc:identifier>
+    <dsdlc:name>Data Engineer Agent</dsdlc:name>
+    <dsdlc:description>Design, build and test data pipelines.</dsdlc:description>
+  </dsdlc:DeliveryRole>
+
+  <dsdlc:DeliveryRole rdf:about="http://example.org/ontology/data-sdlc#Role_testEngineer">
+    <dsdlc:identifier>test-engineer</dsdlc:identifier>
+    <dsdlc:name>Test Engineer Agent</dsdlc:name>
+    <dsdlc:description>Create and execute test scenarios.</dsdlc:description>
+  </dsdlc:DeliveryRole>
+
+  <dsdlc:DeliveryRole rdf:about="http://example.org/ontology/data-sdlc#Role_releaseLead">
+    <dsdlc:identifier>release-lead</dsdlc:identifier>
+    <dsdlc:name>Release Lead Agent</dsdlc:name>
+    <dsdlc:description>Manage release readiness and operations.</dsdlc:description>
+  </dsdlc:DeliveryRole>
+
+  <!-- Delivery Artifacts (28, grouped by producing role) -->
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataAnalystStakeholderRequirements">
+    <dsdlc:identifier>data-analyst.stakeholder-requirements</dsdlc:identifier>
+    <dsdlc:name>Stakeholder Requirements</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_requirements"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataAnalyst"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataAnalystBusinessObjectives">
+    <dsdlc:identifier>data-analyst.business-objectives</dsdlc:identifier>
+    <dsdlc:name>Business Objectives</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_requirements"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataAnalyst"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataAnalystSolutionRequirements">
+    <dsdlc:identifier>data-analyst.solution-requirements</dsdlc:identifier>
+    <dsdlc:name>Solution Requirements</dsdlc:name>
+    <dsdlc:artifactType>specification</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_requirements"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataAnalyst"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataAnalystUseCases">
+    <dsdlc:identifier>data-analyst.use-cases</dsdlc:identifier>
+    <dsdlc:name>Use Cases</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_requirements"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataAnalyst"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataAnalystDataGlossary">
+    <dsdlc:identifier>data-analyst.data-glossary</dsdlc:identifier>
+    <dsdlc:name>Data Glossary (Initial)</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_requirements"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataAnalyst"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataAnalystJiraFeatures">
+    <dsdlc:identifier>data-analyst.jira-features</dsdlc:identifier>
+    <dsdlc:name>JIRA Features</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_requirements"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataAnalyst"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataAnalystRequirementsTraceability">
+    <dsdlc:identifier>data-analyst.requirements-traceability</dsdlc:identifier>
+    <dsdlc:name>Requirements Traceability</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_requirements"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataAnalyst"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerDataDesign">
+    <dsdlc:identifier>data-engineer.data-design</dsdlc:identifier>
+    <dsdlc:name>Data Design (Medallion)</dsdlc:name>
+    <dsdlc:artifactType>model</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_design"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerTechnicalDesign">
+    <dsdlc:identifier>data-engineer.technical-design</dsdlc:identifier>
+    <dsdlc:name>Technical Design</dsdlc:name>
+    <dsdlc:artifactType>specification</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_design"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerDbtModels">
+    <dsdlc:identifier>data-engineer.dbt-models</dsdlc:identifier>
+    <dsdlc:name>dbt Models</dsdlc:name>
+    <dsdlc:artifactType>model</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_development"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerDataQualityTests">
+    <dsdlc:identifier>data-engineer.data-quality-tests</dsdlc:identifier>
+    <dsdlc:name>Data Quality Tests</dsdlc:name>
+    <dsdlc:artifactType>code</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_development"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerInfrastructure">
+    <dsdlc:identifier>data-engineer.infrastructure</dsdlc:identifier>
+    <dsdlc:name>Infrastructure (Terraform)</dsdlc:name>
+    <dsdlc:artifactType>code</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_development"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerDeploymentScripts">
+    <dsdlc:identifier>data-engineer.deployment-scripts</dsdlc:identifier>
+    <dsdlc:name>Deployment Scripts</dsdlc:name>
+    <dsdlc:artifactType>code</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_development"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerRunbook">
+    <dsdlc:identifier>data-engineer.runbook</dsdlc:identifier>
+    <dsdlc:name>Runbook</dsdlc:name>
+    <dsdlc:artifactType>runbook</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_development"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_DataEngineerDataLineage">
+    <dsdlc:identifier>data-engineer.data-lineage</dsdlc:identifier>
+    <dsdlc:name>Data Lineage Documentation</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_development"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_dataEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_TestEngineerTestStrategy">
+    <dsdlc:identifier>test-engineer.test-strategy</dsdlc:identifier>
+    <dsdlc:name>Test Strategy</dsdlc:name>
+    <dsdlc:artifactType>specification</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_testing"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_testEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_TestEngineerTestScenarios">
+    <dsdlc:identifier>test-engineer.test-scenarios</dsdlc:identifier>
+    <dsdlc:name>Test Scenarios</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_testing"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_testEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_TestEngineerTestDataSets">
+    <dsdlc:identifier>test-engineer.test-data-sets</dsdlc:identifier>
+    <dsdlc:name>Test Data Sets</dsdlc:name>
+    <dsdlc:artifactType>model</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_testing"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_testEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_TestEngineerAutomatedTestScripts">
+    <dsdlc:identifier>test-engineer.automated-test-scripts</dsdlc:identifier>
+    <dsdlc:name>Automated Test Scripts</dsdlc:name>
+    <dsdlc:artifactType>code</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_testing"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_testEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_TestEngineerTestExecutionReport">
+    <dsdlc:identifier>test-engineer.test-execution-report</dsdlc:identifier>
+    <dsdlc:name>Test Execution Report</dsdlc:name>
+    <dsdlc:artifactType>report</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_testing"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_testEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_TestEngineerDefectLog">
+    <dsdlc:identifier>test-engineer.defect-log</dsdlc:identifier>
+    <dsdlc:name>Defect Log</dsdlc:name>
+    <dsdlc:artifactType>report</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_testing"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_testEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_TestEngineerTestSummaryReport">
+    <dsdlc:identifier>test-engineer.test-summary-report</dsdlc:identifier>
+    <dsdlc:name>Test Summary Report</dsdlc:name>
+    <dsdlc:artifactType>report</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_testing"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_testEngineer"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_ReleaseLeadReleasePlan">
+    <dsdlc:identifier>release-lead.release-plan</dsdlc:identifier>
+    <dsdlc:name>Release Plan</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_release"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_releaseLead"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_ReleaseLeadDeploymentChecklist">
+    <dsdlc:identifier>release-lead.deployment-checklist</dsdlc:identifier>
+    <dsdlc:name>Deployment Checklist</dsdlc:name>
+    <dsdlc:artifactType>runbook</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_release"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_releaseLead"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_ReleaseLeadChangeLog">
+    <dsdlc:identifier>release-lead.change-log</dsdlc:identifier>
+    <dsdlc:name>Change Log</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_release"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_releaseLead"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_ReleaseLeadReleaseNotes">
+    <dsdlc:identifier>release-lead.release-notes</dsdlc:identifier>
+    <dsdlc:name>Release Notes</dsdlc:name>
+    <dsdlc:artifactType>document</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_release"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_releaseLead"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_ReleaseLeadGoNoGo">
+    <dsdlc:identifier>release-lead.go-no-go</dsdlc:identifier>
+    <dsdlc:name>Go/No-Go Assessment</dsdlc:name>
+    <dsdlc:artifactType>report</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_release"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_releaseLead"/>
+  </dsdlc:DeliveryArtifact>
+
+  <dsdlc:DeliveryArtifact rdf:about="http://example.org/ontology/data-sdlc#Artifact_ReleaseLeadBauHandover">
+    <dsdlc:identifier>release-lead.bau-handover</dsdlc:identifier>
+    <dsdlc:name>BAU Handover Pack</dsdlc:name>
+    <dsdlc:artifactType>runbook</dsdlc:artifactType>
+    <dsdlc:reviewGate rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</dsdlc:reviewGate>
+    <dsdlc:artifactInPhase rdf:resource="http://example.org/ontology/data-sdlc#Phase_release"/>
+    <dsdlc:producedByRole rdf:resource="http://example.org/ontology/data-sdlc#Role_releaseLead"/>
+  </dsdlc:DeliveryArtifact>
 
 </rdf:RDF>
