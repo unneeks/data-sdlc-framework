@@ -425,6 +425,13 @@ export async function runConnectionTest(settings?: ConnectionSettings): Promise<
 
 // --- Project Dashboard APIs ---
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  verified_by?: string;
+}
+
 export interface DashboardWorkProduct {
   key: string;
   name: string;
@@ -434,13 +441,8 @@ export interface DashboardWorkProduct {
   review_gate: boolean;
   updated_at: string | null;
   requested_at: string | null;
-}
-
-export interface ChecklistItem {
-  id: string;
-  text: string;
-  completed: boolean;
-  verified_by?: string;
+  checklist?: ChecklistItem[];
+  owner?: { agent_id?: string | null; human_role?: string | null } | null;
 }
 
 export interface Comment {

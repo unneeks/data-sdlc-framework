@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Loader2, AlertCircle, CheckCircle2, ChevronRight, ChevronLeft, RefreshCw } from 'lucide-react';
-import { DashboardSnapshot, DashboardLane, DashboardWorkProduct, fetchBoardSnapshot, updateTaskStatus } from '../services/api';
+import { Clock, Loader2, AlertCircle, CheckCircle2, RefreshCw, Play, RotateCcw, Trello } from 'lucide-react';
+import { DashboardSnapshot, DashboardLane, DashboardWorkProduct, fetchBoardSnapshot, updateTaskStatus, startDashboard } from '../services/api';
 import { TaskDetailModal } from './TaskDetailModal';
 
 const POLL_INTERVAL_MS = 60000; // 60 seconds
@@ -25,6 +25,8 @@ interface KanbanBoardProps {
 }
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ sessionId: initialSessionId }) => {
+  const [live, setLive] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId || null);
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [selectedTask, setSelectedTask] = useState<{ lane: DashboardLane; task: DashboardWorkProduct } | null>(null);
@@ -55,6 +57,24 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ sessionId: initialSess
     pollRef.current = window.setInterval(poll, POLL_INTERVAL_MS);
     return () => { if (pollRef.current) window.clearInterval(pollRef.current); };
   }, [sessionId]);
+
+  const handleStart = async () => {
+    setIsStarting(true);
+    try {
+      const { session_id } = await startDashboard(live);
+      setSessionId(session_id);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleReset = () => {
+    if (pollRef.current) window.clearInterval(pollRef.current);
+    setSessionId(null);
+    setSnapshot(null);
+    setSelectedTask(null);
+    setLastRefresh(null);
+  };
 
   const handleTaskDragStart = (laneKey: string, taskKey: string, e: React.DragEvent) => {
     setDraggedTask({ laneKey, taskKey });
@@ -97,10 +117,32 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ sessionId: initialSess
   if (!sessionId) {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="glass-panel p-8 rounded-3xl">
-        <div className="space-y-4">
-          <h2 className="text-2xl font-bold text-white">Kanban Board</h2>
-          <p className="text-slate-400 text-sm">No active session. Start a project in the Project Dashboard first.</p>
+        className="glass-panel p-8 rounded-3xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+        <div className="relative z-10 space-y-4">
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-300 text-xs font-bold border border-indigo-500/20 uppercase tracking-widest">
+            <Trello className="w-3.5 h-3.5" /><span>Kanban Board</span>
+          </div>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">Customer Payments Data Product</h2>
+          <p className="text-slate-400 text-sm max-w-2xl">
+            Matrix view of every agent's work products (plus a Human Review lane) across the delivery
+            workflow — drag a card between columns to update its status. DEMO mode replays the same
+            fully scripted simulation as the Project Dashboard; LIVE mode tracks real AgentCore
+            Harness / GitHub Copilot agent runs.
+          </p>
+          <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-700 rounded-xl p-1">
+              <button onClick={() => setLive(false)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${!live ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>DEMO</button>
+              <button onClick={() => setLive(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${live ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>LIVE</button>
+            </div>
+            <button onClick={handleStart} disabled={isStarting}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold flex items-center gap-2 transition">
+              {isStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {isStarting ? 'Starting…' : 'Start Board'}
+            </button>
+          </div>
         </div>
       </motion.div>
     );
@@ -128,7 +170,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ sessionId: initialSess
         className="glass-panel p-6 rounded-3xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">{snapshot.title} — Kanban</h2>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-2xl font-extrabold text-white tracking-tight">{snapshot.title} — Kanban</h2>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                snapshot.live
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              }`}>
+                {snapshot.live ? 'LIVE' : 'DEMO'}
+              </span>
+            </div>
             <p className="text-slate-500 text-sm mt-1">Drag tasks across columns to update status</p>
           </div>
           <div className="flex items-center gap-3">
@@ -143,6 +194,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ sessionId: initialSess
               })}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
               Refresh Now
+            </button>
+            <button onClick={handleReset}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition">
+              <RotateCcw className="w-3.5 h-3.5" /> Reset
             </button>
           </div>
         </div>
@@ -308,7 +363,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, lane, onDragStart, onClick, i
   return (
     <motion.div
       draggable
-      onDragStart={onDragStart}
+      onDragStartCapture={onDragStart}
       onClick={onClick}
       layout
       initial={{ opacity: 0, scale: 0.95 }}
