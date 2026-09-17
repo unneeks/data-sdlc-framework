@@ -5,6 +5,20 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-17
+
+### Added
+
+- **Live Agent Orchestrator workflow UI** (`apps/web/src/components/AgentOrchestratorWorkflow.tsx`, sidebar tab "Agent Orchestrator") — a Live/Demo-toggled console for invoking agents through either backend:
+  - **AgentCore backend** — real AWS Bedrock AgentCore Harness invocations using whatever AWS credentials are already active on the machine (SSO/CLI, via boto3's default chain — no credentials handled by the app).
+  - **GitHub Copilot backend** — invokes agents through the existing GitHub Copilot CLI adapter.
+  - **Demo mode** — fully scripted, zero network calls, exercising the same pause/approve/resume UX as Live mode.
+- **Developer-machine tool bridge** (`harness/client_tools.py`, `harness/live_session.py`) — a curated set of tools (list directory, read file, git status/diff, run tests) that a live agent can ask to run on the operator's own machine rather than in the cloud. The system prompt setup advertises these tools to the model explicitly. When called, the turn loop pauses, publishes a strongly-typed `ClientToolCallRequest` over the existing `EventBus`, and blocks on `bus.wait_for(call_id)` — the same AWAITING_CALLBACK primitive `harness/adapters/client_handoff_adapter.py` already used for CLIENT_RUN steps, applied here per tool call. Only after a human approves it in the UI does the tool actually execute locally and the harness turn resume with the result.
+- **AgentCore observability** (`harness/metrics.py`) — AWS identity (`GetCallerIdentity`) and CloudWatch metrics for a configured AgentCore runtime, both degrading gracefully (not failing) without live AWS access.
+- **New API surface** (`apps/api/live_routes.py`, mounted under `/api/live`): `agents`, `tools/client`, `aws/identity`, `metrics`, `session/start`, `session/{id}/poll`, `session/{id}/tool-calls/{call_id}/approve|deny`.
+- `agents/runner.py`: `parse_harness_stream()` extracted to module level and `AgentRunner.execute_tool()`/`build_prompt()` made public so the live session reuses the exact tool dispatch and Bedrock stream parsing the existing `AgentRunner` REAL mode already relies on, instead of duplicating it.
+- `harness/adapters/github_copilot_adapter.py`: second live backend, wrapping the existing `GitHubCopilotCLIAdapter`.
+
 ## [0.2.0] - 2026-08-30
 
 ### Added

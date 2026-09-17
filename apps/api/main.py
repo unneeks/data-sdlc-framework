@@ -29,6 +29,7 @@ from agents.runner import AgentRunner
 from agents.workflow import WorkflowRunner
 from agents.sdlc_orchestrator import SDLCOrchestrator
 from agents.harness_agents.registry import list_agents as list_harness_agents, get_skill_metadata
+from apps.api import live_routes
 
 app = FastAPI(
     title="Agentic Data Engineering Platform API",
@@ -162,6 +163,10 @@ async def start_harness():
     event_bus = EventBus()
     orchestrator = Orchestrator(event_bus, harness_config)
     app.state.orchestrator_task = asyncio.create_task(orchestrator.run())
+    live_routes.configure(event_bus, agent_runner)
+
+
+app.include_router(live_routes.router)
 
 
 @app.get("/api/status")

@@ -199,6 +199,54 @@ def _build_harness_tools(tool_names: list[str], registry: dict) -> list[dict]:
     return harness_tools
 
 
+def parse_harness_stream(response) -> tuple[list[dict], str]:
+    """Parse an AgentCore `invoke_harness` streaming response into content
+    blocks + stop reason. Module-level (not a method) so that other
+    orchestrators talking to the same Harness API — e.g. LiveAgentSession in
+    harness/live_session.py — can reuse it without needing an AgentRunner
+    instance."""
+    content_blocks: list[dict] = []
+    current_block: dict = {}
+    stop_reason = ""
+
+    stream = response.get("stream", response)
+    for event in stream:
+        if "contentBlockStart" in event:
+            start = event["contentBlockStart"].get("start", {})
+            if "toolUse" in start:
+                current_block = {
+                    "type": "toolUse",
+                    "toolUseId": start["toolUse"]["toolUseId"],
+                    "name": start["toolUse"]["name"],
+                    "input_json": "",
+                }
+            else:
+                current_block = {"type": "text", "text": ""}
+        elif "contentBlockDelta" in event:
+            delta = event["contentBlockDelta"].get("delta", {})
+            if "text" in delta:
+                current_block.setdefault("text", "")
+                current_block["text"] += delta["text"]
+            elif "toolUse" in delta:
+                current_block.setdefault("input_json", "")
+                current_block["input_json"] += delta["toolUse"].get("input", "")
+        elif "contentBlockStop" in event:
+            if not current_block.get("type"):
+                current_block["type"] = "toolUse" if "input_json" in current_block else "text"
+            if current_block.get("type") == "toolUse":
+                try:
+                    current_block["input"] = json.loads(current_block.get("input_json", "{}"))
+                except json.JSONDecodeError:
+                    current_block["input"] = {}
+            if current_block:
+                content_blocks.append(current_block)
+            current_block = {}
+        elif "messageStop" in event:
+            stop_reason = event["messageStop"].get("stopReason", "")
+
+    return content_blocks, stop_reason
+
+
 # ── The generic runner ─────────────────────────────────────
 
 class AgentRunner:
@@ -418,6 +466,21 @@ class AgentRunner:
 
     def get_agent_config(self, agent_key: str) -> dict | None:
         return self._resolve_agent_config(agent_key)
+
+    def execute_tool(self, tool_name: str, tool_input: dict, task_input: dict | None = None) -> dict:
+        """Public entry point for dispatching a single named tool call.
+
+        Exists so other orchestrators (harness/live_session.py) can reuse the
+        same tool_registry.yaml-driven dispatch this runner already does for
+        AgentCore Harness tool_use turns, without duplicating the argument
+        resolution and caching logic in `_execute_tool_by_name`.
+        """
+        return self._execute_tool_by_name(tool_name, tool_input, task_input or {})
+
+    def build_prompt(self, agent_key: str, config: dict, task_input: dict) -> str:
+        """Public alias for `_build_prompt` — see its docstring for the
+        three-layer prompt override order this applies."""
+        return self._build_prompt(agent_key, config, task_input)
 
     def list_agents(self) -> list[str]:
         return sorted(self._agent_configs.keys())
@@ -957,46 +1020,7 @@ class AgentRunner:
     # ── Stream parsing ─────────────────────────────────────
 
     def _parse_stream(self, response) -> tuple[list[dict], str]:
-        content_blocks: list[dict] = []
-        current_block: dict = {}
-        stop_reason = ""
-
-        stream = response.get("stream", response)
-        for event in stream:
-            if "contentBlockStart" in event:
-                start = event["contentBlockStart"].get("start", {})
-                if "toolUse" in start:
-                    current_block = {
-                        "type": "toolUse",
-                        "toolUseId": start["toolUse"]["toolUseId"],
-                        "name": start["toolUse"]["name"],
-                        "input_json": "",
-                    }
-                else:
-                    current_block = {"type": "text", "text": ""}
-            elif "contentBlockDelta" in event:
-                delta = event["contentBlockDelta"].get("delta", {})
-                if "text" in delta:
-                    current_block.setdefault("text", "")
-                    current_block["text"] += delta["text"]
-                elif "toolUse" in delta:
-                    current_block.setdefault("input_json", "")
-                    current_block["input_json"] += delta["toolUse"].get("input", "")
-            elif "contentBlockStop" in event:
-                if not current_block.get("type"):
-                    current_block["type"] = "toolUse" if "input_json" in current_block else "text"
-                if current_block.get("type") == "toolUse":
-                    try:
-                        current_block["input"] = json.loads(current_block.get("input_json", "{}"))
-                    except json.JSONDecodeError:
-                        current_block["input"] = {}
-                if current_block:
-                    content_blocks.append(current_block)
-                current_block = {}
-            elif "messageStop" in event:
-                stop_reason = event["messageStop"].get("stopReason", "")
-
-        return content_blocks, stop_reason
+        return parse_harness_stream(response)
 
 
 def _summarize(result: dict) -> dict:
