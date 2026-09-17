@@ -56,6 +56,8 @@ class LiveAgentSession:
         agent_runner: Any,
         agent_config: Dict[str, Any],
         github_backend: Any = None,
+        metrics_tracker: Any = None,
+        metrics_lane_key: Optional[str] = None,
     ) -> None:
         self.session_id = session_id
         self.agent_id = agent_id
@@ -69,6 +71,12 @@ class LiveAgentSession:
         self._agent_runner = agent_runner
         self._agent_config = agent_config
         self._github_backend = github_backend
+        # Optional: an InvocationMetricsTracker (harness/agentcore_invocation_metrics.py)
+        # this session reports real per-turn token usage into, keyed by
+        # metrics_lane_key — used by the Project Dashboard (harness/project_dashboard.py)
+        # to drive its cost/token tiles from real AgentCore invocations.
+        self._metrics_tracker = metrics_tracker
+        self._metrics_lane_key = metrics_lane_key
         self._pending_calls: Dict[str, ClientToolCallRequest] = {}
 
     # ── event plumbing ──────────────────────────────────────
@@ -106,6 +114,13 @@ class LiveAgentSession:
         result = await asyncio.to_thread(self._github_backend.run_turn, self.agent_id, prompt)
         self.status = result["status"]
         self.final_text = result["text"]
+        # GitHub Copilot CLI has no usage API; approximate from text length
+        # (~4 chars/token) so the dashboard still shows a directional cost,
+        # clearly weaker than AgentCore's real per-turn usage.
+        self._record_usage({
+            "inputTokens": max(1, len(prompt) // 4),
+            "outputTokens": max(1, len(result["text"]) // 4),
+        })
         self._emit("SESSION_RESPONSE", text=result["text"])
         self._emit(
             "SESSION_COMPLETED" if self.status == "COMPLETED" else "SESSION_FAILED",
@@ -145,7 +160,8 @@ class LiveAgentSession:
 
         for turn in range(_MAX_TURNS):
             response = await asyncio.to_thread(client.invoke_harness, **invoke_kwargs)
-            content_blocks, stop_reason = parse_harness_stream(response)
+            content_blocks, stop_reason, usage = parse_harness_stream(response)
+            self._record_usage(usage)
 
             for block in content_blocks:
                 if block.get("type") == "text" and block.get("text", "").strip():
@@ -266,6 +282,19 @@ class LiveAgentSession:
             logger.warning("client tool call %s resolved but no loop was waiting on it", call_id)
         self._pending_calls.pop(call_id, None)
         return result
+
+    def _record_usage(self, usage: Dict[str, Any]) -> None:
+        if not usage or self._metrics_tracker is None or self._metrics_lane_key is None:
+            return
+        from harness.agentcore_invocation_metrics import TokenUsage
+
+        self._metrics_tracker.record(
+            self._metrics_lane_key,
+            TokenUsage(
+                input_tokens=int(usage.get("inputTokens", 0) or 0),
+                output_tokens=int(usage.get("outputTokens", 0) or 0),
+            ),
+        )
 
     def _build_system_prompt(self) -> str:
         base = self._agent_config.get("system_prompt") or f"You are the {self.agent_id} agent."

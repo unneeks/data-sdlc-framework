@@ -384,6 +384,94 @@ export async function sdlcDemoReset(): Promise<void> {
   await fetch(`${API_BASE}/sdlc-demo/reset`, { method: 'POST' });
 }
 
+// --- Project Dashboard APIs ---
+
+export interface DashboardWorkProduct {
+  key: string;
+  name: string;
+  phase: string;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'AWAITING_REVIEW' | 'COMPLETED';
+  version: string;
+  review_gate: boolean;
+  updated_at: string | null;
+  requested_at: string | null;
+}
+
+export interface DashboardLane {
+  key: string;
+  name: string;
+  role: string;
+  color: string;
+  status: 'IDLE' | 'RUNNING' | 'WAITING_FOR_APPROVAL' | 'COMPLETED' | 'FAILED';
+  current_activity: string;
+  work_products: DashboardWorkProduct[];
+  counts: { done: number; total: number };
+  elapsed_seconds: number;
+  token_cost_usd: number;
+  total_tokens: number;
+  backend: string;
+  events: any[];
+}
+
+export interface DashboardPhase {
+  key: string;
+  label: string;
+  done: number;
+  total: number;
+}
+
+export interface DashboardHumanAttentionItem {
+  lane_key: string;
+  lane_name: string;
+  work_product_key: string;
+  work_product_name: string;
+  requested_at: string | null;
+  version: string;
+}
+
+export interface DashboardSnapshot {
+  session_id: string;
+  title: string;
+  live: boolean;
+  started_at: string;
+  elapsed_seconds: number;
+  token_cost_usd: number;
+  total_tokens: number;
+  work_products_done: number;
+  work_products_total: number;
+  agents_active: number;
+  agents_total: number;
+  phases: DashboardPhase[];
+  lanes: DashboardLane[];
+  recent_activity: any[];
+  human_attention_required: DashboardHumanAttentionItem[];
+}
+
+export async function startDashboard(live: boolean, title?: string): Promise<{ session_id: string; live: boolean }> {
+  const res = await fetch(`${API_BASE}/dashboard/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ live, title }),
+  });
+  return await res.json();
+}
+
+export async function fetchDashboardSnapshot(sessionId: string): Promise<DashboardSnapshot> {
+  const res = await fetch(`${API_BASE}/dashboard/${sessionId}/snapshot`);
+  return await res.json();
+}
+
+export async function reviewWorkProduct(
+  sessionId: string, laneKey: string, workProductKey: string, approve: boolean, version: string = '',
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/dashboard/${sessionId}/work-products/${laneKey}/${workProductKey}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approve, version }),
+  });
+  return await res.json();
+}
+
 // --- Live Agent Orchestrator APIs ---
 
 export interface LiveAgent {

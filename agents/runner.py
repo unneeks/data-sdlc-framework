@@ -199,19 +199,26 @@ def _build_harness_tools(tool_names: list[str], registry: dict) -> list[dict]:
     return harness_tools
 
 
-def parse_harness_stream(response) -> tuple[list[dict], str]:
+def parse_harness_stream(response) -> tuple[list[dict], str, dict]:
     """Parse an AgentCore `invoke_harness` streaming response into content
-    blocks + stop reason. Module-level (not a method) so that other
-    orchestrators talking to the same Harness API — e.g. LiveAgentSession in
-    harness/live_session.py — can reuse it without needing an AgentRunner
-    instance."""
+    blocks, stop reason, and token usage. Module-level (not a method) so
+    that other orchestrators talking to the same Harness API — e.g.
+    LiveAgentSession in harness/live_session.py — can reuse it without
+    needing an AgentRunner instance.
+
+    `usage` is `{}` when the stream carries no `metadata` event (older
+    Harness responses, or a stub in tests) — callers should treat a missing
+    usage dict as "unknown", not as zero tokens actually spent."""
     content_blocks: list[dict] = []
     current_block: dict = {}
     stop_reason = ""
+    usage: dict = {}
 
     stream = response.get("stream", response)
     for event in stream:
-        if "contentBlockStart" in event:
+        if "metadata" in event:
+            usage = event["metadata"].get("usage", {}) or usage
+        elif "contentBlockStart" in event:
             start = event["contentBlockStart"].get("start", {})
             if "toolUse" in start:
                 current_block = {
@@ -244,7 +251,7 @@ def parse_harness_stream(response) -> tuple[list[dict], str]:
         elif "messageStop" in event:
             stop_reason = event["messageStop"].get("stopReason", "")
 
-    return content_blocks, stop_reason
+    return content_blocks, stop_reason, usage
 
 
 # ── The generic runner ─────────────────────────────────────
@@ -611,7 +618,7 @@ class AgentRunner:
             response = client.invoke_harness(**invoke_kwargs)
             turn_elapsed = time.monotonic() - turn_start
 
-            content_blocks, stop_reason = self._parse_stream(response)
+            content_blocks, stop_reason, _usage = self._parse_stream(response)
 
             reasoning_texts = [b["text"] for b in content_blocks if b.get("type") == "text" and b.get("text", "").strip()]
             tool_calls_in_turn = [b for b in content_blocks if b.get("type") == "toolUse"]
@@ -1019,7 +1026,7 @@ class AgentRunner:
 
     # ── Stream parsing ─────────────────────────────────────
 
-    def _parse_stream(self, response) -> tuple[list[dict], str]:
+    def _parse_stream(self, response) -> tuple[list[dict], str, dict]:
         return parse_harness_stream(response)
 
 

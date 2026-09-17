@@ -464,8 +464,19 @@
     ]
   },
   "metamodel.version": {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "changelog": [
+      {
+        "version": "0.2.0",
+        "date": "2026-09-17",
+        "summary": "Populate DeliveryPhase/DeliveryArtifact instances for the Project Dashboard workflow UI; register test-planner-agent.",
+        "changes": [
+          "delivery_phases: the canonical 10-phase sequence (Discovery..Transition to BAU) instantiated for the first time; DeliveryPhase existed in the ontology since v0.1.0 but had no data instances.",
+          "delivery_artifacts: 28 work products produced by the Data Analyst/Data Engineer/Test Engineer/Release Lead lanes in the Project Dashboard (harness/project_dashboard.py), each linked to its producing agent and phase.",
+          "artifact_lifecycle_states: NOT_STARTED/IN_PROGRESS/AWAITING_REVIEW/COMPLETED, matching domain/project.py::WorkProductStatus.",
+          "agents: registered test-planner-agent, which was already provisioned (agentcore_config.json) and used by agents/sdlc_orchestrator.py but missing from this registry."
+        ]
+      },
       {
         "version": "0.1.0",
         "date": "2026-08-09",
@@ -712,6 +723,39 @@
         "execution_model": "EXTERNAL_AGENT",
         "external_provider": "github-copilot-coding-agent",
         "status": "CANDIDATE"
+      },
+      {
+        "key": "test-planner-agent",
+        "name": "Test Planner Agent",
+        "role_key": "regression-engineer",
+        "mission": "Generate a risk-based test plan (strategy, test cases, exit criteria) from approved requirements and design documents before implementation begins.",
+        "capabilities": [
+          "testing",
+          "impact-analysis"
+        ],
+        "delivery_capabilities": [
+          "regression-assurance"
+        ],
+        "skills": [
+          "test-selection",
+          "test-execution"
+        ],
+        "tools": [
+          "git"
+        ],
+        "knowledge_packs": [
+          "testing-standards"
+        ],
+        "execution_model": "ITERATIVE",
+        "model_provider": "bedrock",
+        "model_name": "claude-opus",
+        "status": "ACTIVE",
+        "delivery": {
+          "supported_tasks": [],
+          "produces_evidence": [
+            "ev.test-plan-draft"
+          ]
+        }
       }
     ]
   },
@@ -3514,6 +3558,330 @@
         ],
         "requires_provenance": false,
         "dimension": "SHARED"
+      }
+    ]
+  },
+  "delivery_phases": {
+    "version": "0.1.0",
+    "delivery_phases": [
+      {
+        "key": "discovery",
+        "name": "Discovery",
+        "order": 1,
+        "description": "Understand the business context, current state, and constraints before committing to a solution."
+      },
+      {
+        "key": "requirements",
+        "name": "Requirements",
+        "order": 2,
+        "description": "Capture and validate what the change must achieve, in testable, traceable form."
+      },
+      {
+        "key": "architecture",
+        "name": "Architecture",
+        "order": 3,
+        "description": "Assess feasibility and choose an architecture that satisfies the requirements and NFRs."
+      },
+      {
+        "key": "design",
+        "name": "Design",
+        "order": 4,
+        "description": "Produce the logical/technical design: data model, schema mapping, pipeline design."
+      },
+      {
+        "key": "development",
+        "name": "Development",
+        "order": 5,
+        "description": "Build the pipelines, models, and infrastructure the design calls for."
+      },
+      {
+        "key": "testing",
+        "name": "Testing",
+        "order": 6,
+        "description": "Verify the build against the requirements: unit, integration, and reconciliation testing."
+      },
+      {
+        "key": "release",
+        "name": "Release",
+        "order": 7,
+        "description": "Prepare and execute the release: readiness assessment, deployment checklist, go/no-go."
+      },
+      {
+        "key": "deployment",
+        "name": "Deployment",
+        "order": 8,
+        "description": "Deploy the change to its target environment(s)."
+      },
+      {
+        "key": "operations",
+        "name": "Operations",
+        "order": 9,
+        "description": "Operate the change in production: monitoring, incident response, support."
+      },
+      {
+        "key": "transition-to-bau",
+        "name": "Transition to BAU",
+        "order": 10,
+        "description": "Hand the change over to business-as-usual ownership and support."
+      }
+    ]
+  },
+  "artifact_lifecycle_states": {
+    "version": "0.1.0",
+    "artifact_lifecycle_states": [
+      {
+        "key": "NOT_STARTED",
+        "name": "Not Started",
+        "description": "No work has begun on this artifact.",
+        "rank": 1
+      },
+      {
+        "key": "IN_PROGRESS",
+        "name": "In Progress",
+        "description": "An agent is actively producing this artifact.",
+        "rank": 2
+      },
+      {
+        "key": "AWAITING_REVIEW",
+        "name": "Awaiting Review",
+        "description": "A draft exists and is parked on a human approval gate before it can be marked complete.",
+        "rank": 3,
+        "requires_human": true
+      },
+      {
+        "key": "COMPLETED",
+        "name": "Completed",
+        "description": "The artifact has been produced (and, if gated, approved).",
+        "rank": 4
+      }
+    ]
+  },
+  "delivery_artifacts": {
+    "version": "0.1.0",
+    "delivery_artifacts": [
+      {
+        "key": "data-analyst.stakeholder-requirements",
+        "name": "Stakeholder Requirements",
+        "phase_key": "requirements",
+        "produced_by_agent": "impact-analysis-agent",
+        "produced_by_lane": "data-analyst",
+        "review_gate": false
+      },
+      {
+        "key": "data-analyst.business-objectives",
+        "name": "Business Objectives",
+        "phase_key": "requirements",
+        "produced_by_agent": "impact-analysis-agent",
+        "produced_by_lane": "data-analyst",
+        "review_gate": false
+      },
+      {
+        "key": "data-analyst.solution-requirements",
+        "name": "Solution Requirements",
+        "phase_key": "requirements",
+        "produced_by_agent": "impact-analysis-agent",
+        "produced_by_lane": "data-analyst",
+        "review_gate": true
+      },
+      {
+        "key": "data-analyst.use-cases",
+        "name": "Use Cases",
+        "phase_key": "requirements",
+        "produced_by_agent": "impact-analysis-agent",
+        "produced_by_lane": "data-analyst",
+        "review_gate": false
+      },
+      {
+        "key": "data-analyst.data-glossary",
+        "name": "Data Glossary (Initial)",
+        "phase_key": "requirements",
+        "produced_by_agent": "impact-analysis-agent",
+        "produced_by_lane": "data-analyst",
+        "review_gate": false
+      },
+      {
+        "key": "data-analyst.jira-features",
+        "name": "JIRA Features",
+        "phase_key": "requirements",
+        "produced_by_agent": "impact-analysis-agent",
+        "produced_by_lane": "data-analyst",
+        "review_gate": false
+      },
+      {
+        "key": "data-analyst.requirements-traceability",
+        "name": "Requirements Traceability",
+        "phase_key": "requirements",
+        "produced_by_agent": "impact-analysis-agent",
+        "produced_by_lane": "data-analyst",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.data-design",
+        "name": "Data Design (Medallion)",
+        "phase_key": "design",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.technical-design",
+        "name": "Technical Design",
+        "phase_key": "design",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.dbt-models",
+        "name": "dbt Models",
+        "phase_key": "development",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.data-quality-tests",
+        "name": "Data Quality Tests",
+        "phase_key": "development",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.infrastructure",
+        "name": "Infrastructure (Terraform)",
+        "phase_key": "development",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.deployment-scripts",
+        "name": "Deployment Scripts",
+        "phase_key": "development",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.runbook",
+        "name": "Runbook",
+        "phase_key": "development",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "data-engineer.data-lineage",
+        "name": "Data Lineage Documentation",
+        "phase_key": "development",
+        "produced_by_agent": "data-quality-agent",
+        "produced_by_lane": "data-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "test-engineer.test-strategy",
+        "name": "Test Strategy",
+        "phase_key": "testing",
+        "produced_by_agent": "test-planner-agent",
+        "produced_by_lane": "test-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "test-engineer.test-scenarios",
+        "name": "Test Scenarios",
+        "phase_key": "testing",
+        "produced_by_agent": "test-planner-agent",
+        "produced_by_lane": "test-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "test-engineer.test-data-sets",
+        "name": "Test Data Sets",
+        "phase_key": "testing",
+        "produced_by_agent": "test-planner-agent",
+        "produced_by_lane": "test-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "test-engineer.automated-test-scripts",
+        "name": "Automated Test Scripts",
+        "phase_key": "testing",
+        "produced_by_agent": "test-planner-agent",
+        "produced_by_lane": "test-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "test-engineer.test-execution-report",
+        "name": "Test Execution Report",
+        "phase_key": "testing",
+        "produced_by_agent": "test-planner-agent",
+        "produced_by_lane": "test-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "test-engineer.defect-log",
+        "name": "Defect Log",
+        "phase_key": "testing",
+        "produced_by_agent": "test-planner-agent",
+        "produced_by_lane": "test-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "test-engineer.test-summary-report",
+        "name": "Test Summary Report",
+        "phase_key": "testing",
+        "produced_by_agent": "test-planner-agent",
+        "produced_by_lane": "test-engineer",
+        "review_gate": false
+      },
+      {
+        "key": "release-lead.release-plan",
+        "name": "Release Plan",
+        "phase_key": "release",
+        "produced_by_agent": "delivery-compliance-agent",
+        "produced_by_lane": "release-lead",
+        "review_gate": false
+      },
+      {
+        "key": "release-lead.deployment-checklist",
+        "name": "Deployment Checklist",
+        "phase_key": "release",
+        "produced_by_agent": "delivery-compliance-agent",
+        "produced_by_lane": "release-lead",
+        "review_gate": true
+      },
+      {
+        "key": "release-lead.change-log",
+        "name": "Change Log",
+        "phase_key": "release",
+        "produced_by_agent": "delivery-compliance-agent",
+        "produced_by_lane": "release-lead",
+        "review_gate": false
+      },
+      {
+        "key": "release-lead.release-notes",
+        "name": "Release Notes",
+        "phase_key": "release",
+        "produced_by_agent": "delivery-compliance-agent",
+        "produced_by_lane": "release-lead",
+        "review_gate": false
+      },
+      {
+        "key": "release-lead.go-no-go",
+        "name": "Go/No-Go Assessment",
+        "phase_key": "release",
+        "produced_by_agent": "delivery-compliance-agent",
+        "produced_by_lane": "release-lead",
+        "review_gate": false
+      },
+      {
+        "key": "release-lead.bau-handover",
+        "name": "BAU Handover Pack",
+        "phase_key": "release",
+        "produced_by_agent": "delivery-compliance-agent",
+        "produced_by_lane": "release-lead",
+        "review_gate": false
       }
     ]
   }
