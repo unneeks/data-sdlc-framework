@@ -270,6 +270,107 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "toolSpec": {
+            "name": "sync_code_from_s3",
+            "description": (
+                "Fetch the current code baseline from S3 into a scratch git workspace and "
+                "create a working branch. Call this ONCE at the start of a coding task, before "
+                "any edits. Safe to call again in the same session — it returns the existing "
+                "workspace instead of recreating it. Use this when the environment has no "
+                "direct network access to source control."
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "branch_hint": {
+                            "type": "string",
+                            "description": "Optional branch name to resume/create. Omit to start a new branch from the latest baseline.",
+                        },
+                        "force": {
+                            "type": "boolean",
+                            "description": "Recreate the workspace even if one already exists for this session (default false).",
+                        },
+                    },
+                },
+            },
+        },
+    },
+    {
+        "toolSpec": {
+            "name": "push_code_to_s3",
+            "description": (
+                "Write file changes into the scratch workspace created by sync_code_from_s3, "
+                "commit them, archive the result, and upload it to S3, then notify the "
+                "orchestrator watching for changes. Pass the full new content of every "
+                "changed/added file. Call this once at the end of a coding task, or more than "
+                "once for incremental checkpoints. Requires sync_code_from_s3 to have been "
+                "called first in this session."
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "files": {
+                            "type": "array",
+                            "description": "Files to write, with their full new content.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "relative_path": {"type": "string"},
+                                    "content": {"type": "string"},
+                                },
+                                "required": ["relative_path", "content"],
+                            },
+                        },
+                        "delete_files": {
+                            "type": "array",
+                            "description": "Paths (relative to the workspace root) to delete.",
+                            "items": {"type": "string"},
+                        },
+                        "commit_message": {
+                            "type": "string",
+                            "description": "Commit message describing the change.",
+                        },
+                    },
+                },
+            },
+        },
+    },
+    {
+        "toolSpec": {
+            "name": "publish_documents",
+            "description": (
+                "Publish one or more finished documents (specs, reports, test plans, etc.) "
+                "produced this session to durable S3 storage, and notify the orchestrator. "
+                "Pass all documents produced so far in a single call when possible."
+            ),
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "documents": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "One or more documents to publish.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "content": {"type": "string"},
+                                    "content_type": {"type": "string", "description": "e.g. text/markdown"},
+                                    "description": {"type": "string"},
+                                },
+                                "required": ["name", "content"],
+                            },
+                        },
+                    },
+                    "required": ["documents"],
+                },
+            },
+        },
+    },
 ]
 
 

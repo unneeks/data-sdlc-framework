@@ -19,7 +19,7 @@ from harness.live_session import LiveAgentSession
 class _StubAgentRunner:
     """Minimal stand-in for agents.runner.AgentRunner — only execute_tool is used."""
 
-    def execute_tool(self, tool_name, tool_input, task_input=None):
+    def execute_tool(self, tool_name, tool_input, task_input=None, session_id=""):
         return {"tool": tool_name, "input": tool_input, "result": "stubbed"}
 
 

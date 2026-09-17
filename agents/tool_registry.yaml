@@ -182,3 +182,62 @@ tools:
         source: input
         key: requirements
         default: null
+
+  # Code Sync — see docs/adr/0008. session_id comes from the runner
+  # context (threaded through by AgentRunner.execute_tool), never from the
+  # LLM, so an agent can't spoof another session's scratch workspace.
+  sync_code_from_s3:
+    module: agents.skills.code_sync
+    function: sync_code_from_s3
+    args:
+      session_id:
+        source: context
+        key: session_id
+      agent_id:
+        source: input_or_task
+        key: agent_id
+        default: ""
+      branch_hint:
+        source: input
+        key: branch_hint
+        default: null
+      force:
+        source: input
+        key: force
+        default: false
+
+  push_code_to_s3:
+    module: agents.skills.code_sync
+    function: push_code_to_s3
+    args:
+      session_id:
+        source: context
+        key: session_id
+      files:
+        source: input
+        key: files
+        default: []
+      delete_files:
+        source: input
+        key: delete_files
+        default: []
+      commit_message:
+        source: input
+        key: commit_message
+        default: "Agent update"
+
+  publish_documents:
+    module: agents.skills.code_sync
+    function: publish_documents
+    args:
+      session_id:
+        source: context
+        key: session_id
+      agent_id:
+        source: input_or_task
+        key: agent_id
+        default: ""
+      documents:
+        source: input
+        key: documents
+        default: []
