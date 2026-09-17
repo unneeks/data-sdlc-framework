@@ -62,46 +62,54 @@ def _build_agentcore_agent_config(agent_id: str) -> Dict[str, Any]:
 @router.get("/agents")
 def list_live_agents():
     """Every agent invocable from the Live Agent Orchestrator UI, tagged by
-    backend. AgentCore harness status is refreshed against a live
-    list_harnesses() call when AWS is reachable, so this reflects what's
-    actually running right now rather than only the locally cached status
-    agentcore_config.json last recorded at provisioning time; falls back
-    to that cached status when AWS isn't reachable (e.g. no AWS access in
-    this environment) — never a hard failure."""
+    backend. AgentCore harnesses are listed ONLY from a live
+    list_harnesses() call, using the Connection Tester's configured region/
+    credentials — never from agentcore_config.json's locally cached
+    snapshot. If AWS isn't reachable, no AgentCore harnesses are returned
+    at all: a stale cached ARN/region is worse than an empty list, since
+    it can silently claim a harness exists (or exists in a region) when
+    that's no longer true. Local agent config supplies only what AWS has
+    no concept of — display name, mission, and configured model — matched
+    to each live harness by id."""
     agentcore_agents = []
     try:
         from agents.harness_agents.registry import get_agent_config, list_agents as list_harness_agents
         from harness.connection_tester import list_harnesses, load_settings
 
         live = list_harnesses(load_settings())
-        live_status_by_harness_id = {
-            h.get("harnessId") or h.get("harness_id"): h.get("status", "UNKNOWN")
-            for h in live["harnesses"]
-            if h.get("harnessId") or h.get("harness_id")
-        }
+        if live["available"]:
+            local_by_harness_id = {}
+            for a in list_harness_agents():
+                if not a.get("has_harness"):
+                    continue
+                runtime_info = agentcore_metrics.get_agentcore_runtime_info(a["key"])
+                if runtime_info.get("harness_id"):
+                    local_by_harness_id[runtime_info["harness_id"]] = a
 
-        for a in list_harness_agents():
-            if not a.get("has_harness"):
-                continue
-            runtime_info = agentcore_metrics.get_agentcore_runtime_info(a["key"])
-            status = live_status_by_harness_id.get(runtime_info["harness_id"], runtime_info["status"])
-            # AWS's Harness resource carries no model config of its own
-            # (create_harness only takes harnessName/executionRoleArn) —
-            # the model is chosen per invocation, so "the harness's
-            # configured model" is this app's own agent_configs.yaml/
-            # .agentcore convention setting, not something list_harnesses
-            # could ever return.
-            agent_config = get_agent_config(a["key"]) or {}
-            agentcore_agents.append({
-                "id": a["key"],
-                "name": a.get("name", a["key"]),
-                "description": a.get("mission", ""),
-                "backend": AgentBackend.AGENTCORE.value,
-                "live_ready": status == "READY",
-                "harness_status": status,
-                "model_id": agent_config.get("bedrock_model_id", ""),
-                "harness_arn": runtime_info.get("harness_arn", ""),
-            })
+            for h in live["harnesses"]:
+                harness_id = h.get("harnessId") or h.get("harness_id")
+                if not harness_id:
+                    continue
+                a = local_by_harness_id.get(harness_id)
+                if a is None:
+                    continue  # a harness AWS knows about but no local agent_key maps to — not invocable from this UI
+                # AWS's Harness resource carries no model config of its own
+                # (create_harness only takes harnessName/executionRoleArn) —
+                # the model is chosen per invocation, so "the harness's
+                # configured model" is this app's own agent_configs.yaml/
+                # .agentcore convention setting, not something AWS returns.
+                agent_config = get_agent_config(a["key"]) or {}
+                status = h.get("status", "UNKNOWN")
+                agentcore_agents.append({
+                    "id": a["key"],
+                    "name": a.get("name", a["key"]),
+                    "description": a.get("mission", ""),
+                    "backend": AgentBackend.AGENTCORE.value,
+                    "live_ready": status == "READY",
+                    "harness_status": status,
+                    "model_id": agent_config.get("bedrock_model_id", ""),
+                    "harness_arn": h.get("harnessArn") or h.get("arn") or h.get("harness_arn") or "",
+                })
     except Exception:
         pass
 

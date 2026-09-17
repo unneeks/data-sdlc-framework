@@ -1,7 +1,9 @@
 """Unit tests for apps/api/live_routes.py::list_live_agents()'s AgentCore
-harness status, which now refreshes against a live list_harnesses() call
-instead of trusting only the locally cached agentcore_config.json status
-recorded at provisioning time.
+harness listing, which is built ONLY from a live list_harnesses() call —
+never from agentcore_config.json's locally cached snapshot. A cached
+ARN/region can silently claim a harness exists (or exists in a region)
+when that's no longer true, so an unreachable AWS means an empty
+AgentCore list, not a stale guess.
 """
 import sys
 from pathlib import Path
@@ -15,20 +17,18 @@ from apps.api import live_routes
 from harness import metrics as agentcore_metrics
 
 
-def test_live_status_overrides_stale_cached_status(monkeypatch):
-    """The locally cached status says READY (stale), but AWS's live list
-    says the harness no longer exists / isn't ready — the live status
-    must win."""
+def test_lists_only_harnesses_confirmed_by_the_live_call(monkeypatch):
     monkeypatch.setattr(registry, "list_agents", lambda: [
         {"key": "test-agent", "name": "Test Agent", "mission": "does things", "has_harness": True},
     ])
     monkeypatch.setattr(registry, "get_agent_config", lambda agent_key: {"bedrock_model_id": "us.anthropic.claude-opus-4-6-v1"})
     monkeypatch.setattr(agentcore_metrics, "get_agentcore_runtime_info", lambda agent_id: {
-        "harness_arn": "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/h1",
-        "harness_id": "h1", "region": "ap-southeast-2", "status": "READY",
+        "harness_arn": "arn:aws:bedrock-agentcore:us-west-2:1:harness/CACHED-STALE",
+        "harness_id": "h1", "region": "us-west-2", "status": "READY",
     })
     monkeypatch.setattr(connection_tester, "list_harnesses", lambda settings: {
-        "available": True, "harnesses": [{"harnessId": "h1", "status": "STOPPED"}],
+        "available": True,
+        "harnesses": [{"harnessId": "h1", "harnessArn": "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/LIVE", "status": "READY"}],
     })
     monkeypatch.setattr(connection_tester, "load_settings", lambda: connection_tester.ConnectionSettings())
     monkeypatch.setattr(live_routes, "_load_json", lambda path: [])
@@ -36,21 +36,38 @@ def test_live_status_overrides_stale_cached_status(monkeypatch):
     result = live_routes.list_live_agents()
     agentcore_agents = [a for a in result["agents"] if a["backend"] == "AGENTCORE"]
     assert len(agentcore_agents) == 1
-    assert agentcore_agents[0]["harness_status"] == "STOPPED"
-    assert agentcore_agents[0]["live_ready"] is False
+    # The live ARN wins, never the cached/stale one, and it's in the
+    # settings' region (ap-southeast-2), not the cached us-west-2.
+    assert agentcore_agents[0]["harness_arn"] == "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/LIVE"
     assert agentcore_agents[0]["model_id"] == "us.anthropic.claude-opus-4-6-v1"
-    assert agentcore_agents[0]["harness_arn"] == "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/h1"
 
 
-def test_falls_back_to_cached_status_when_aws_unreachable(monkeypatch):
+def test_live_status_wins_over_stale_cached_status(monkeypatch):
     monkeypatch.setattr(registry, "list_agents", lambda: [
         {"key": "test-agent", "name": "Test Agent", "mission": "does things", "has_harness": True},
     ])
-    monkeypatch.setattr(registry, "get_agent_config", lambda agent_key: {"bedrock_model_id": "us.anthropic.claude-opus-4-6-v1"})
+    monkeypatch.setattr(registry, "get_agent_config", lambda agent_key: {"bedrock_model_id": "m"})
     monkeypatch.setattr(agentcore_metrics, "get_agentcore_runtime_info", lambda agent_id: {
-        "harness_arn": "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/h1",
-        "harness_id": "h1", "region": "ap-southeast-2", "status": "READY",
+        "harness_arn": "arn:...", "harness_id": "h1", "region": "us-west-2", "status": "READY",
     })
+    monkeypatch.setattr(connection_tester, "list_harnesses", lambda settings: {
+        "available": True, "harnesses": [{"harnessId": "h1", "harnessArn": "arn:live", "status": "STOPPED"}],
+    })
+    monkeypatch.setattr(connection_tester, "load_settings", lambda: connection_tester.ConnectionSettings())
+    monkeypatch.setattr(live_routes, "_load_json", lambda path: [])
+
+    result = live_routes.list_live_agents()
+    agentcore_agents = [a for a in result["agents"] if a["backend"] == "AGENTCORE"]
+    assert agentcore_agents[0]["harness_status"] == "STOPPED"
+    assert agentcore_agents[0]["live_ready"] is False
+
+
+def test_no_agentcore_harnesses_listed_when_aws_unreachable(monkeypatch):
+    """An empty list is the honest answer — never fall back to a locally
+    cached snapshot that might no longer be true."""
+    monkeypatch.setattr(registry, "list_agents", lambda: [
+        {"key": "test-agent", "name": "Test Agent", "mission": "does things", "has_harness": True},
+    ])
     monkeypatch.setattr(connection_tester, "list_harnesses", lambda settings: {
         "available": False, "reason": "Unable to locate credentials", "harnesses": [],
     })
@@ -58,9 +75,21 @@ def test_falls_back_to_cached_status_when_aws_unreachable(monkeypatch):
     monkeypatch.setattr(live_routes, "_load_json", lambda path: [])
 
     result = live_routes.list_live_agents()
-    agentcore_agents = [a for a in result["agents"] if a["backend"] == "AGENTCORE"]
-    assert agentcore_agents[0]["harness_status"] == "READY"  # falls back to the cached status
-    assert agentcore_agents[0]["live_ready"] is True
+    assert [a for a in result["agents"] if a["backend"] == "AGENTCORE"] == []
+
+
+def test_a_live_harness_with_no_local_agent_key_is_excluded(monkeypatch):
+    """A harness AWS knows about but this app has no registered agent_key
+    for isn't invocable from this UI, so it's left out too."""
+    monkeypatch.setattr(registry, "list_agents", lambda: [])
+    monkeypatch.setattr(connection_tester, "list_harnesses", lambda settings: {
+        "available": True, "harnesses": [{"harnessId": "orphan-harness", "harnessArn": "arn:x", "status": "READY"}],
+    })
+    monkeypatch.setattr(connection_tester, "load_settings", lambda: connection_tester.ConnectionSettings())
+    monkeypatch.setattr(live_routes, "_load_json", lambda path: [])
+
+    result = live_routes.list_live_agents()
+    assert [a for a in result["agents"] if a["backend"] == "AGENTCORE"] == []
 
 
 def test_agents_without_a_harness_are_excluded(monkeypatch):
