@@ -5,6 +5,17 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-17
+
+### Added
+
+- **Project Dashboard workflow UI** (`apps/web/src/components/ProjectDashboard.tsx`, sidebar tab "Project Dashboard") — a project-status view matching a reference screenshot: header stat tiles (elapsed time, token cost, work products, agents active), a 5-phase progress stepper (Requirements → Design → Build → Test → Release), four concurrent agent lane cards (Data Analyst, Data Engineer, Test Engineer, Release Lead) each with a live activity feed and work-product checklist, a Recent Activity feed, a Human Attention Required queue, and a Project Insights panel.
+- **`harness/project_dashboard.py`** — runs the four lanes concurrently. Every LIVE lane drives a real `LiveAgentSession` (AgentCore Harness or GitHub Copilot, best-effort agent mapping per lane); a lane whose mapped agent isn't reachable fails only that lane. A work product's human review step reuses the same `EventBus` pause/resume primitive the client-tool bridge (0.3.0) already uses, applied per work product instead of per tool call. DEMO mode is a fully scripted, deterministic, offline simulation.
+- **`harness/agentcore_invocation_metrics.py`** — aggregates real per-turn AgentCore token usage (extracted from a new `metadata.usage` block in `agents/runner.py::parse_harness_stream`, which now returns a 3-tuple) into per-lane/per-project cost, token, and elapsed-time figures — the adapter driving the dashboard's LIVE metrics tiles, distinct from and complementary to the CloudWatch-based `harness/metrics.py`.
+- **New API surface** (`apps/api/dashboard_routes.py`, mounted under `/api/dashboard`): `start`, `{id}/snapshot`, `{id}/work-products/{lane}/{key}/review`.
+- **Metamodel/ontology data gap fixed**: `apps/web/src/data/metamodel.json` gained `delivery_phases` (canonical 10-phase sequence) and `delivery_artifacts` (the dashboard's 28 work products) instances — the `DeliveryPhase`/`DeliveryArtifact` ontology classes existed since v0.1.0 but had never been populated — plus a new `artifact_lifecycle_states` enum and a missing `test-planner-agent` registration. See `docs/adr/0007-project-dashboard-concurrent-lanes.md`.
+- `tests/test_project_dashboard.py`: 7 new tests (DEMO snapshot shape, review approve/deny pause-resume, per-lane LIVE failure isolation, metrics aggregation).
+
 ## [0.3.0] - 2026-09-17
 
 ### Added

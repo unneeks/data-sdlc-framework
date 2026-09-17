@@ -18,6 +18,7 @@ import { OntologyExplorer } from './components/OntologyExplorer';
 import { WorkflowSimulation } from './components/WorkflowSimulation';
 import { SDLCDemoWorkflow } from './components/SDLCDemoWorkflow';
 import { AgentOrchestratorWorkflow } from './components/AgentOrchestratorWorkflow';
+import { ProjectDashboard } from './components/ProjectDashboard';
 
 import { fetchDeliveryTypes, fetchAgents, DeliveryType, Agent } from './services/api';
 
@@ -179,6 +180,7 @@ export default function App() {
                 {activeTab === 'ontology' && <OntologyExplorer />}
                 {activeTab === 'sdlc_demo' && <SDLCDemoWorkflow />}
                 {activeTab === 'live_orchestrator' && <AgentOrchestratorWorkflow />}
+                {activeTab === 'dashboard' && <ProjectDashboard />}
               </motion.div>
             </AnimatePresence>
           </div>

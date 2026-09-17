@@ -46,10 +46,17 @@ from harness.live_session import LiveAgentSession
 
 logger = logging.getLogger(__name__)
 
-PHASES = ["requirements", "design", "build", "test", "release"]
+# Phase keys match the canonical 10-phase DeliveryPhase sequence in
+# ontology/data-sdlc.{owl,rdfs} and apps/web/src/data/metamodel.json's
+# `delivery_phases` (Discovery..Transition to BAU) — this dashboard only
+# surfaces the five phases its four lanes actually produce work for. Labels
+# are the shorter product-facing names the reference screenshot uses
+# ("Build" for Development, "Test" for Testing); the underlying keys stay
+# canonical so this data lines up with the rest of the metamodel.
+PHASES = ["requirements", "design", "development", "testing", "release"]
 PHASE_LABELS = {
-    "requirements": "Requirements", "design": "Design", "build": "Build",
-    "test": "Test", "release": "Release",
+    "requirements": "Requirements", "design": "Design", "development": "Build",
+    "testing": "Test", "release": "Release",
 }
 
 # Each lane's `work_products` are exactly what's produced; `script` drives the
@@ -94,12 +101,12 @@ LANE_DEFINITIONS: List[Dict[str, Any]] = [
         "work_products": [
             {"key": "data-design", "name": "Data Design (Medallion)", "phase": "design"},
             {"key": "technical-design", "name": "Technical Design", "phase": "design"},
-            {"key": "dbt-models", "name": "dbt Models", "phase": "build"},
-            {"key": "data-quality-tests", "name": "Data Quality Tests", "phase": "build"},
-            {"key": "infrastructure", "name": "Infrastructure (Terraform)", "phase": "build"},
-            {"key": "deployment-scripts", "name": "Deployment Scripts", "phase": "build"},
-            {"key": "runbook", "name": "Runbook", "phase": "build"},
-            {"key": "data-lineage", "name": "Data Lineage Documentation", "phase": "build"},
+            {"key": "dbt-models", "name": "dbt Models", "phase": "development"},
+            {"key": "data-quality-tests", "name": "Data Quality Tests", "phase": "development"},
+            {"key": "infrastructure", "name": "Infrastructure (Terraform)", "phase": "development"},
+            {"key": "deployment-scripts", "name": "Deployment Scripts", "phase": "development"},
+            {"key": "runbook", "name": "Runbook", "phase": "development"},
+            {"key": "data-lineage", "name": "Data Lineage Documentation", "phase": "development"},
         ],
         "script": [
             ("data-design", 1.5, "COMPLETED", "v1.0"),
@@ -117,13 +124,13 @@ LANE_DEFINITIONS: List[Dict[str, Any]] = [
         "copilot_agent_id": "regression-test-agent",
         "prompt": "Create system test scenarios based on the functional requirements and data contracts for this change.",
         "work_products": [
-            {"key": "test-strategy", "name": "Test Strategy", "phase": "test"},
-            {"key": "test-scenarios", "name": "Test Scenarios", "phase": "test"},
-            {"key": "test-data-sets", "name": "Test Data Sets", "phase": "test"},
-            {"key": "automated-test-scripts", "name": "Automated Test Scripts", "phase": "test"},
-            {"key": "test-execution-report", "name": "Test Execution Report", "phase": "test"},
-            {"key": "defect-log", "name": "Defect Log", "phase": "test"},
-            {"key": "test-summary-report", "name": "Test Summary Report", "phase": "test"},
+            {"key": "test-strategy", "name": "Test Strategy", "phase": "testing"},
+            {"key": "test-scenarios", "name": "Test Scenarios", "phase": "testing"},
+            {"key": "test-data-sets", "name": "Test Data Sets", "phase": "testing"},
+            {"key": "automated-test-scripts", "name": "Automated Test Scripts", "phase": "testing"},
+            {"key": "test-execution-report", "name": "Test Execution Report", "phase": "testing"},
+            {"key": "defect-log", "name": "Defect Log", "phase": "testing"},
+            {"key": "test-summary-report", "name": "Test Summary Report", "phase": "testing"},
         ],
         "script": [
             ("test-strategy", 1.2, "COMPLETED", "v1.0"),
