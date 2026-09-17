@@ -436,6 +436,23 @@ export interface DashboardWorkProduct {
   requested_at: string | null;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  verified_by?: string;
+}
+
+export interface Comment {
+  id: string;
+  task_id: string;
+  author: string;
+  author_type: 'agent' | 'human' | 'system';
+  body: string;
+  timestamp: string;
+  thread_id?: string;
+}
+
 export interface DashboardLane {
   key: string;
   name: string;
@@ -704,4 +721,91 @@ export async function fetchImpactAnalysis(changeId: string = "CR-2026-8942") {
       ]
     }
   };
+}
+
+// --- Kanban Board APIs ---
+
+export async function fetchBoardSnapshot(sessionId: string): Promise<DashboardSnapshot> {
+  try {
+    const res = await fetch(`${API_BASE}/board/${sessionId}/snapshot`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Using offline fallback for board snapshot", e);
+  }
+  return {
+    session_id: sessionId,
+    title: "Customer Payments Data Product",
+    live: false,
+    started_at: new Date().toISOString(),
+    elapsed_seconds: 0,
+    token_cost_usd: 0,
+    total_tokens: 0,
+    work_products_done: 0,
+    work_products_total: 0,
+    agents_active: 0,
+    agents_total: 4,
+    phases: [],
+    lanes: [],
+    recent_activity: [],
+    human_attention_required: [],
+  };
+}
+
+export async function updateTaskStatus(
+  sessionId: string,
+  taskKey: string,
+  newStatus: string,
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/board/${sessionId}/tasks/${taskKey}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_status: newStatus }),
+  });
+  if (!res.ok) throw new Error(`Failed to update task status: ${res.statusText}`);
+  return await res.json();
+}
+
+export async function fetchTaskComments(sessionId: string, taskKey: string): Promise<Comment[]> {
+  try {
+    const res = await fetch(`${API_BASE}/board/${sessionId}/tasks/${taskKey}/comments`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.comments || [];
+    }
+  } catch (e) {
+    console.warn("Failed to fetch task comments", e);
+  }
+  return [];
+}
+
+export async function postTaskComment(
+  sessionId: string,
+  taskKey: string,
+  author: string,
+  authorType: 'agent' | 'human' | 'system',
+  body: string,
+): Promise<Comment> {
+  const res = await fetch(`${API_BASE}/board/${sessionId}/tasks/${taskKey}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ author, author_type: authorType, body }),
+  });
+  if (!res.ok) throw new Error(`Failed to post comment: ${res.statusText}`);
+  const data = await res.json();
+  return data.comment;
+}
+
+export async function updateChecklistItem(
+  sessionId: string,
+  taskKey: string,
+  itemId: string,
+  completed: boolean,
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/board/${sessionId}/tasks/${taskKey}/checklist/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ completed }),
+  });
+  if (!res.ok) throw new Error(`Failed to update checklist item: ${res.statusText}`);
+  return await res.json();
 }

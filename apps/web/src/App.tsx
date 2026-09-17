@@ -19,6 +19,7 @@ import { WorkflowSimulation } from './components/WorkflowSimulation';
 import { SDLCDemoWorkflow } from './components/SDLCDemoWorkflow';
 import { AgentOrchestratorWorkflow } from './components/AgentOrchestratorWorkflow';
 import { ProjectDashboard } from './components/ProjectDashboard';
+import { KanbanBoard } from './components/KanbanBoard';
 import { AgentCoreConnectionTester } from './components/AgentCoreConnectionTester';
 
 import { fetchDeliveryTypes, fetchAgents, createProject, DeliveryType, Agent } from './services/api';
@@ -191,6 +192,7 @@ export default function App() {
                 {activeTab === 'sdlc_demo' && <SDLCDemoWorkflow />}
                 {activeTab === 'live_orchestrator' && <AgentOrchestratorWorkflow />}
                 {activeTab === 'dashboard' && <ProjectDashboard projectId={projectId} projectTitle={projectTitle} />}
+                {activeTab === 'kanban_board' && <KanbanBoard />}
                 {activeTab === 'connection_tester' && <AgentCoreConnectionTester />}
               </motion.div>
             </AnimatePresence>

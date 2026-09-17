@@ -39,7 +39,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from domain.orchestration import AgentBackend, AgentEvent
-from domain.project import LaneStatus, WorkProduct, WorkProductStatus
+from domain.project import LaneStatus, WorkProduct, WorkProductStatus, Comment, ChecklistItem
 from harness.agentcore_invocation_metrics import InvocationMetricsTracker, TokenUsage
 from harness.bus import EventBus
 from harness.live_session import LiveAgentSession
@@ -354,6 +354,7 @@ class ProjectDashboardSession:
         self.lanes: Dict[str, ProjectLane] = {
             d["key"]: ProjectLane(d, bus, self.metrics) for d in (lane_definitions or DEFAULT_LANE_DEFINITIONS)
         }
+        self.comments: Dict[str, List[Comment]] = {}
 
     async def run(self) -> None:
         await asyncio.gather(*[
@@ -435,3 +436,45 @@ class ProjectDashboardSession:
             "recent_activity": recent_activity[-30:],
             "human_attention_required": human_attention,
         }
+
+    def get_comments(self, task_key: str) -> List[dict]:
+        comments = self.comments.get(task_key, [])
+        return [json.loads(c.model_dump_json()) for c in comments]
+
+    def add_comment(self, task_key: str, author: str, author_type: str, body: str) -> dict:
+        comment = Comment(
+            id=str(uuid.uuid4()),
+            task_id=task_key,
+            author=author,
+            author_type=author_type,
+            body=body,
+            timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        )
+        if task_key not in self.comments:
+            self.comments[task_key] = []
+        self.comments[task_key].append(comment)
+        return json.loads(comment.model_dump_json())
+
+    async def update_task_status(self, lane_key: str, work_product_key: str, new_status: str) -> bool:
+        lane = self.lanes.get(lane_key)
+        if lane is None or work_product_key not in lane.work_products:
+            return False
+        wp = lane.work_products[work_product_key]
+        old_status = wp.status.value
+        wp.status = WorkProductStatus(new_status)
+        wp.touch()
+        lane._emit("WORK_PRODUCT_STATUS_CHANGED", work_product=work_product_key, old_status=old_status, new_status=new_status)
+        self.add_comment(work_product_key, "system", "system", f"Status changed from {old_status} to {new_status}")
+        return True
+
+    async def update_checklist_item(self, lane_key: str, work_product_key: str, item_id: str, completed: bool) -> bool:
+        lane = self.lanes.get(lane_key)
+        if lane is None or work_product_key not in lane.work_products:
+            return False
+        wp = lane.work_products[work_product_key]
+        for item in wp.checklist:
+            if item.id == item_id:
+                item.completed = completed
+                wp.touch()
+                return True
+        return False
