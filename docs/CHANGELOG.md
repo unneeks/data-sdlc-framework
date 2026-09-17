@@ -5,6 +5,16 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-17
+
+### Added
+
+- **Ontology instance data** — `ontology/data-sdlc.owl` and `.rdfs` previously defined the `DeliveryPhase`/`DeliveryArtifact`/`DeliveryRole` classes with zero individuals; they now carry real instance data mirroring `apps/web/src/data/metamodel.json` exactly (see `docs/adr/0011-ontology-instance-data.md`):
+  - 10 `DeliveryPhase` individuals (Discovery → Transition to BAU), 4 `DeliveryRole` individuals (one per dashboard lane), 28 `DeliveryArtifact` individuals (Infrastructure (Terraform), dbt Models, and all other work products) — added to both files identically.
+  - Two new properties added where none fit: `reviewGate` (boolean, on `DeliveryArtifact`) and `artifactInPhase`/`producedByRole` (linking an artifact directly to its phase/role, since the existing `hasArtifact` property's domain is `DeliveryTask` and this app has no task-level individuals).
+  - `tests/test_ontology_delivery_artifacts.py` (4 new tests) — parses both ontology files and `metamodel.json`, asserting they never drift out of sync.
+  - Explicit non-goal, unchanged from ADR 0010: work products still don't vary by delivery type; this only populates instance data for the existing, delivery-type-agnostic set.
+
 ## [0.7.0] - 2026-09-17
 
 ### Added
