@@ -23,6 +23,7 @@ from domain.orchestration import AgentBackend
 from harness import metrics as agentcore_metrics
 from harness.adapters.github_copilot_adapter import GithubCopilotBackend
 from harness.bus import EventBus
+from harness.client_tools import CLIENT_TOOL_DEFINITIONS
 from harness.live_session import LiveAgentSession
 
 router = APIRouter(prefix="/api/live", tags=["live-orchestrator"])
@@ -105,6 +106,19 @@ def list_live_agents():
         })
 
     return {"agents": agentcore_agents + copilot_agents}
+
+
+@router.get("/tools/client")
+def list_client_tools():
+    """The tools advertised to every live agent as 'runs on the developer's
+    machine, requires approval' — surfaced so the UI can show operators what
+    an agent might ask to run locally before they grant a run."""
+    return {
+        "tools": [
+            {"name": t["toolSpec"]["name"], "description": t["toolSpec"]["description"]}
+            for t in CLIENT_TOOL_DEFINITIONS
+        ]
+    }
 
 
 @router.get("/aws/identity")

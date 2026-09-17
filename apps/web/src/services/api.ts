@@ -384,6 +384,133 @@ export async function sdlcDemoReset(): Promise<void> {
   await fetch(`${API_BASE}/sdlc-demo/reset`, { method: 'POST' });
 }
 
+// --- Live Agent Orchestrator APIs ---
+
+export interface LiveAgent {
+  id: string;
+  name: string;
+  description: string;
+  backend: 'AGENTCORE' | 'GITHUB_COPILOT';
+  live_ready: boolean;
+  harness_status: string;
+}
+
+export interface LiveEvent {
+  id: string;
+  event_type: string;
+  source_agent_id: string;
+  session_id: string;
+  payload: Record<string, any>;
+  timestamp: string;
+}
+
+export interface PendingClientToolCall {
+  call_id: string;
+  session_id: string;
+  turn: number;
+  tool_name: string;
+  arguments: Record<string, any>;
+  status: string;
+  requested_at: string;
+}
+
+export interface LiveSessionPoll {
+  status: string;
+  events: LiveEvent[];
+  next_cursor: number;
+  pending_calls: PendingClientToolCall[];
+  final_text: string | null;
+}
+
+export interface AwsIdentity {
+  available: boolean;
+  account?: string;
+  arn?: string;
+  user_id?: string;
+  region?: string;
+  reason?: string;
+}
+
+export interface AgentCoreMetrics {
+  available: boolean;
+  reason?: string;
+  namespace?: string;
+  agent_runtime_id?: string;
+  lookback_minutes?: number;
+  series?: Array<{ metric: string; timestamps: string[]; values: number[]; total: number }>;
+}
+
+export interface ClientTool {
+  name: string;
+  description: string;
+}
+
+export async function fetchClientTools(): Promise<ClientTool[]> {
+  try {
+    const res = await fetch(`${API_BASE}/live/tools/client`);
+    if (res.ok) return (await res.json()).tools;
+  } catch (e) {
+    console.warn("Using offline fallback for client tools", e);
+  }
+  return [];
+}
+
+export async function fetchLiveAgents(): Promise<LiveAgent[]> {
+  try {
+    const res = await fetch(`${API_BASE}/live/agents`);
+    if (res.ok) return (await res.json()).agents;
+  } catch (e) {
+    console.warn("Using offline fallback for live agents", e);
+  }
+  return [];
+}
+
+export async function fetchAwsIdentity(): Promise<AwsIdentity> {
+  try {
+    const res = await fetch(`${API_BASE}/live/aws/identity`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Failed to fetch AWS identity", e);
+  }
+  return { available: false, reason: 'not reachable' };
+}
+
+export async function fetchLiveMetrics(agentId: string): Promise<AgentCoreMetrics> {
+  try {
+    const res = await fetch(`${API_BASE}/live/metrics?agent_id=${encodeURIComponent(agentId)}`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn("Failed to fetch live metrics", e);
+  }
+  return { available: false, reason: 'not reachable' };
+}
+
+export async function startLiveSession(
+  agentId: string, backend: 'AGENTCORE' | 'GITHUB_COPILOT', live: boolean, prompt: string,
+): Promise<{ session_id: string }> {
+  const res = await fetch(`${API_BASE}/live/session/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_id: agentId, backend, live, prompt }),
+  });
+  return await res.json();
+}
+
+export async function pollLiveSession(sessionId: string, since: number): Promise<LiveSessionPoll> {
+  const res = await fetch(`${API_BASE}/live/session/${sessionId}/poll?since=${since}`);
+  return await res.json();
+}
+
+export async function approveClientToolCall(sessionId: string, callId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/live/session/${sessionId}/tool-calls/${callId}/approve`, { method: 'POST' });
+  return await res.json();
+}
+
+export async function denyClientToolCall(sessionId: string, callId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/live/session/${sessionId}/tool-calls/${callId}/deny`, { method: 'POST' });
+  return await res.json();
+}
+
 export async function fetchImpactAnalysis(changeId: string = "CR-2026-8942") {
   try {
     const res = await fetch(`${API_BASE}/impact/${changeId}`);
