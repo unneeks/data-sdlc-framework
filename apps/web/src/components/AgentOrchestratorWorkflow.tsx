@@ -97,7 +97,9 @@ export const AgentOrchestratorWorkflow: React.FC = () => {
     setPendingCalls([]);
     setFinalText(null);
     cursorRef.current = 0;
-    const { session_id } = await startLiveSession(selectedAgent.id, selectedAgent.backend, live, prompt);
+    const { session_id } = await startLiveSession(
+      selectedAgent.id, selectedAgent.backend, live, prompt, selectedAgent.harness_arn,
+    );
     setSessionId(session_id);
     setStatus('RUNNING');
   };

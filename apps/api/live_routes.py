@@ -68,9 +68,10 @@ def list_live_agents():
     snapshot. If AWS isn't reachable, no AgentCore harnesses are returned
     at all: a stale cached ARN/region is worse than an empty list, since
     it can silently claim a harness exists (or exists in a region) when
-    that's no longer true. Local agent config supplies only what AWS has
-    no concept of — display name, mission, and configured model — matched
-    to each live harness by id."""
+    that's no longer true. Every harness AWS reports is returned, whether
+    or not a local agent_key happens to map to it — a harness with no
+    local mapping is still invocable, just without the display name/
+    mission/model this app's own agent_configs.yaml can add on top."""
     agentcore_agents = []
     try:
         from agents.harness_agents.registry import get_agent_config, list_agents as list_harness_agents
@@ -88,27 +89,28 @@ def list_live_agents():
 
             for h in live["harnesses"]:
                 harness_id = h.get("harnessId") or h.get("harness_id")
-                if not harness_id:
+                harness_arn = h.get("harnessArn") or h.get("arn") or h.get("harness_arn") or ""
+                if not harness_id and not harness_arn:
                     continue
-                a = local_by_harness_id.get(harness_id)
-                if a is None:
-                    continue  # a harness AWS knows about but no local agent_key maps to — not invocable from this UI
+                a = local_by_harness_id.get(harness_id) if harness_id else None
+                status = h.get("status", "UNKNOWN")
                 # AWS's Harness resource carries no model config of its own
                 # (create_harness only takes harnessName/executionRoleArn) —
                 # the model is chosen per invocation, so "the harness's
                 # configured model" is this app's own agent_configs.yaml/
-                # .agentcore convention setting, not something AWS returns.
-                agent_config = get_agent_config(a["key"]) or {}
-                status = h.get("status", "UNKNOWN")
+                # .agentcore convention setting when one maps to this
+                # harness, and left blank otherwise.
+                agent_config = get_agent_config(a["key"]) if a else None
                 agentcore_agents.append({
-                    "id": a["key"],
-                    "name": a.get("name", a["key"]),
-                    "description": a.get("mission", ""),
+                    "id": a["key"] if a else harness_id,
+                    "name": (a.get("name", a["key"]) if a
+                             else (h.get("harnessName") or h.get("name") or harness_id)),
+                    "description": a.get("mission", "") if a else "",
                     "backend": AgentBackend.AGENTCORE.value,
                     "live_ready": status == "READY",
                     "harness_status": status,
-                    "model_id": agent_config.get("bedrock_model_id", ""),
-                    "harness_arn": h.get("harnessArn") or h.get("arn") or h.get("harness_arn") or "",
+                    "model_id": (agent_config or {}).get("bedrock_model_id", ""),
+                    "harness_arn": harness_arn,
                 })
     except Exception:
         pass
@@ -165,6 +167,7 @@ async def start_session(payload: dict):
     prompt = payload.get("prompt", "")
     live = bool(payload.get("live", False))
     backend_raw = payload.get("backend", AgentBackend.AGENTCORE.value)
+    harness_arn = payload.get("harness_arn")
     if not agent_id:
         raise HTTPException(status_code=400, detail="agent_id is required")
 
@@ -177,6 +180,13 @@ async def start_session(payload: dict):
     agent_config = (
         _build_agentcore_agent_config(agent_id) if backend == AgentBackend.AGENTCORE else {}
     )
+    if backend == AgentBackend.AGENTCORE and harness_arn:
+        # The harness picker (list_live_agents) may surface a harness with
+        # no local agent_key mapping, in which case _build_agentcore_agent_config
+        # above found no local config to source an ARN or model from — the
+        # caller passes the AWS harness ARN it picked directly instead.
+        agent_config["harness_arn"] = harness_arn
+        agent_config.setdefault("bedrock_model_id", _agent_runner._model_map.get("claude-sonnet", ""))
 
     session = LiveAgentSession(
         session_id=session_id, agent_id=agent_id, backend=backend, live=live,
