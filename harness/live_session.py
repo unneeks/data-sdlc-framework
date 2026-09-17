@@ -221,7 +221,7 @@ class LiveAgentSession:
                 pending_futures[block["toolUseId"]] = self._bus.wait_for(call.call_id)
             else:
                 self._emit("TOOL_CALL", name=name, input=tool_input)
-                result = self._agent_runner.execute_tool(name, tool_input, {})
+                result = self._agent_runner.execute_tool(name, tool_input, {}, session_id=self.session_id)
                 self._emit("TOOL_RESULT", name=name, result=_truncate(result))
                 tool_results.append({
                     "toolResult": {

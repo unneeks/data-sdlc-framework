@@ -5,6 +5,24 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-09-17
+
+### Added
+
+- **S3-bridged code/document sync** for AgentCore Harness environments with no direct network access to source control (see `docs/adr/0008-s3-bridged-code-and-document-sync.md`):
+  - `domain/events.py` — `SdlcEventEnvelope`, a single message shape for every event (`SDLCEventType.CODE_PUSHED_TO_S3` / `DOCUMENT_PUBLISHED`), durably JSON-serializable to S3.
+  - `agents/skills/code_sync.py` — three new tools (`sync_code_from_s3`, `push_code_to_s3`, `publish_documents`), registered as ordinary `agents/tool_registry.yaml`/`agents/tools/definitions.py` entries so both `LiveAgentSession` and the CLI's `AgentRunner` path dispatch them identically, with no turn-loop changes.
+  - `harness/s3_event_log.py` — `SdlcEventPoller`, a project-wide watcher (independent of any single agent session) that reads the S3-backed event log (one object per event under a sortable key, since S3 has no true append), with a durable local cursor, bounded-retry handler dispatch, and dead-lettering for malformed events or poison-pill handlers.
+  - `harness/code_sync_apply.py` — imports an incoming code change into the developer's real local repo as a new local branch via `git fetch <tmp> HEAD:refs/heads/agentcore/<branch>`, which structurally never touches the working tree or index; never forces a non-fast-forward, retrying into a timestamped side branch instead. Uses a content-addressed, deterministic synthetic commit (`git commit-tree` over a fixed identity/timestamp) so redelivering the same event is a verified no-op.
+  - `harness/document_sync_apply.py` — downloads published documents to a local directory.
+  - `harness/repo_sync_config.py` — configurable bucket/prefixes, falling back to the existing knowledgebase bucket if unset.
+  - `.agentcore/skills/code-sync/skill.md` — the agent-facing skill doc.
+  - `bootstrap_repo_sync.py` — one-time script to seed the initial S3 code baseline.
+  - `apps/api/repo_sync_routes.py` (`/api/repo-sync/status`, `/api/repo-sync/events`), wired into `apps/api/main.py`'s startup.
+  - Fixed a real, pre-existing gap found while wiring this up: `setup_agentcore.py`'s IAM policy had no S3 statements at all (unlike `agents/conventions/provisioner.py`'s).
+  - `agents/runner.py`/`harness/live_session.py`: `session_id` is now threaded through tool dispatch, since a scratch git workspace needs to be keyed per session rather than per shared `AgentRunner` instance.
+  - 27 new tests across `tests/test_repo_sync_events.py`, `tests/test_s3_event_log.py`, `tests/test_code_sync.py`, `tests/test_code_sync_apply.py` — including a direct verification (real git, not just design intent) that applying an incoming change never touches the developer's working tree or staged changes.
+
 ## [0.4.0] - 2026-09-17
 
 ### Added

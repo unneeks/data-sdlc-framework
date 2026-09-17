@@ -474,15 +474,22 @@ class AgentRunner:
     def get_agent_config(self, agent_key: str) -> dict | None:
         return self._resolve_agent_config(agent_key)
 
-    def execute_tool(self, tool_name: str, tool_input: dict, task_input: dict | None = None) -> dict:
+    def execute_tool(self, tool_name: str, tool_input: dict, task_input: dict | None = None,
+                      session_id: str = "") -> dict:
         """Public entry point for dispatching a single named tool call.
 
         Exists so other orchestrators (harness/live_session.py) can reuse the
         same tool_registry.yaml-driven dispatch this runner already does for
         AgentCore Harness tool_use turns, without duplicating the argument
         resolution and caching logic in `_execute_tool_by_name`.
+
+        `session_id` is threaded through to the resolver's `context` dict so
+        session-scoped tools (agents/skills/code_sync.py's scratch
+        workspaces) can key their own state — this AgentRunner instance is
+        shared across every concurrent LiveAgentSession, so without a
+        session key two sessions would clobber each other's workspace.
         """
-        return self._execute_tool_by_name(tool_name, tool_input, task_input or {})
+        return self._execute_tool_by_name(tool_name, tool_input, task_input or {}, session_id=session_id)
 
     def build_prompt(self, agent_key: str, config: dict, task_input: dict) -> str:
         """Public alias for `_build_prompt` — see its docstring for the
@@ -669,7 +676,7 @@ class AgentRunner:
                     if block.get("type") == "toolUse":
                         self._emit("tool_call", name=block["name"], input=block.get("input", {}))
                         tool_start = time.monotonic()
-                        tool_result_text = self._execute_tool(block["name"], block["input"], task_input)
+                        tool_result_text = self._execute_tool(block["name"], block["input"], task_input, session_id=session_id)
                         tool_elapsed = time.monotonic() - tool_start
                         self._emit("tool_result", name=block["name"],
                                    result=tool_result_text[:500], latency=round(tool_elapsed, 1))
@@ -712,12 +719,14 @@ class AgentRunner:
 
     # ── Generic tool dispatch ──────────────────────────────
 
-    def _execute_tool(self, tool_name: str, tool_input: dict, task_input: dict | None = None) -> str:
-        result = self._execute_tool_by_name(tool_name, tool_input, task_input or {})
+    def _execute_tool(self, tool_name: str, tool_input: dict, task_input: dict | None = None,
+                       session_id: str = "") -> str:
+        result = self._execute_tool_by_name(tool_name, tool_input, task_input or {}, session_id=session_id)
         return json.dumps(result, default=str)
 
     def _execute_tool_by_name(
         self, tool_name: str, tool_input: dict, task_input: dict, use_cache: bool = False,
+        session_id: str = "",
     ) -> Any:
         """Dispatch a tool call using the YAML tool registry."""
         spec = self._tool_registry.get(tool_name)
@@ -728,6 +737,7 @@ class AgentRunner:
             "repository_root": self.repository_root,
             "project_seed": self.project_seed,
             "test_scenarios": self.test_scenarios,
+            "session_id": session_id,
         }
 
         self._ensure_cache("discovered_files")
