@@ -36,14 +36,16 @@ from typing import Any, Dict, Optional
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _CONFIG_JSON_PATH = _PROJECT_ROOT / "agentcore_config.json"
 
-_DEFAULT_REGION = "us-west-2"
+_DEFAULT_REGION = "ap-southeast-2"
 _DEFAULT_PROJECT = "data-sdlc-framework"
+_DEFAULT_CREDENTIALS_PATH = "~/.aws/credentials"
+_DEFAULT_PROFILE = "default"
 
 
 @dataclass
 class ConnectionSettings:
-    credentials_path: str = ""
-    profile: str = ""
+    credentials_path: str = _DEFAULT_CREDENTIALS_PATH
+    profile: str = _DEFAULT_PROFILE
     region: str = _DEFAULT_REGION
     project: str = _DEFAULT_PROJECT
 
@@ -73,9 +75,14 @@ def load_settings() -> ConnectionSettings:
         stored.get("credentials_path")
         or os.getenv("AGENTCORE_CONNECTION_CREDENTIALS_PATH")
         or os.getenv("AWS_SHARED_CREDENTIALS_FILE")
-        or ""
+        or _DEFAULT_CREDENTIALS_PATH
     )
-    profile = stored.get("profile") or os.getenv("AGENTCORE_CONNECTION_PROFILE") or os.getenv("AWS_PROFILE") or ""
+    profile = (
+        stored.get("profile")
+        or os.getenv("AGENTCORE_CONNECTION_PROFILE")
+        or os.getenv("AWS_PROFILE")
+        or _DEFAULT_PROFILE
+    )
     region = (
         stored.get("region")
         or os.getenv("AGENTCORE_AWS_REGION")
@@ -145,6 +152,70 @@ def build_session(settings: ConnectionSettings) -> Any:
         return boto3.Session(botocore_session=core_session, region_name=settings.region or None)
 
     return boto3.Session(profile_name=settings.profile or None, region_name=settings.region or None)
+
+
+def _explicit_overrides() -> Dict[str, str]:
+    """The tiers a human/env actually set explicitly — saved settings or a
+    recognized env var — never the hardcoded-default tier below them.
+    Empty means the tester has nothing explicit configured, so callers of
+    build_boto3_client fall back to their own pre-existing default/
+    credential behavior rather than silently adopting this module's
+    hardcoded defaults (which, unlike this function, load_settings()
+    always returns a concrete value for)."""
+    stored = _read_stored_settings()
+
+    credentials_path = (
+        stored.get("credentials_path")
+        or os.getenv("AGENTCORE_CONNECTION_CREDENTIALS_PATH")
+        or os.getenv("AWS_SHARED_CREDENTIALS_FILE")
+        or ""
+    )
+    profile = stored.get("profile") or os.getenv("AGENTCORE_CONNECTION_PROFILE") or os.getenv("AWS_PROFILE") or ""
+    region = (
+        stored.get("region")
+        or os.getenv("AGENTCORE_AWS_REGION")
+        or os.getenv("AWS_DEFAULT_REGION")
+        or os.getenv("AWS_REGION")
+        or ""
+    )
+
+    overrides: Dict[str, str] = {}
+    if credentials_path:
+        overrides["credentials_path"] = credentials_path
+    if profile:
+        overrides["profile"] = profile
+    if region:
+        overrides["region"] = region
+    return overrides
+
+
+def build_boto3_client(service_name: str, default_region: Optional[str] = None, **client_kwargs) -> Any:
+    """Build a boto3 client for `service_name`, honoring an EXPLICIT
+    Connection Tester override (saved via the UI, or a recognized env var)
+    for credentials/profile/region. Falls back to `default_region` and
+    boto3's untouched default credential chain when nothing explicit is
+    configured, so a call site that adopts this helper sees zero behavior
+    change on a machine that has never touched the Connection Tester —
+    this is what elevates the tester's settings from a page-local
+    diagnostic into the app's single connectivity source of truth without
+    silently changing anyone's defaults."""
+    overrides = _explicit_overrides()
+    region = overrides.get("region") or default_region
+
+    if "credentials_path" in overrides or "profile" in overrides:
+        settings = ConnectionSettings(
+            credentials_path=overrides.get("credentials_path", ""),
+            profile=overrides.get("profile", ""),
+            region=region or _DEFAULT_REGION,
+        )
+        session = build_session(settings)
+        return session.client(service_name, **client_kwargs)
+
+    import boto3
+
+    if region:
+        return boto3.client(service_name, region_name=region, **client_kwargs)
+    return boto3.client(service_name, **client_kwargs)
 
 
 def run_connection_test(settings: ConnectionSettings) -> dict:

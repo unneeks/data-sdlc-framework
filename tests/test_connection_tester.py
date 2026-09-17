@@ -12,7 +12,9 @@ root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
 import harness.connection_tester as connection_tester
-from harness.connection_tester import ConnectionSettings, build_session, load_settings, run_connection_test, save_settings
+from harness.connection_tester import (
+    ConnectionSettings, build_boto3_client, build_session, load_settings, run_connection_test, save_settings,
+)
 
 
 def _use_tmp_config(monkeypatch, tmp_path, existing: dict | None = None):
@@ -35,18 +37,22 @@ def test_load_settings_defaults_from_env_vars(monkeypatch, tmp_path):
     assert settings.region == "eu-west-1"
     assert settings.project == "my-project"
     assert settings.profile == "my-profile"
-    assert settings.credentials_path == ""
+    assert settings.credentials_path == "~/.aws/credentials"
 
 
 def test_load_settings_falls_back_to_hardcoded_defaults(monkeypatch, tmp_path):
     _use_tmp_config(monkeypatch, tmp_path)
-    for var in ["AGENTCORE_AWS_REGION", "AWS_DEFAULT_REGION", "AWS_REGION", "AGENTCORE_PROJECT", "AWS_PROFILE"]:
+    for var in [
+        "AGENTCORE_AWS_REGION", "AWS_DEFAULT_REGION", "AWS_REGION", "AGENTCORE_PROJECT", "AWS_PROFILE",
+        "AGENTCORE_CONNECTION_PROFILE", "AGENTCORE_CONNECTION_CREDENTIALS_PATH", "AWS_SHARED_CREDENTIALS_FILE",
+    ]:
         monkeypatch.delenv(var, raising=False)
 
     settings = load_settings()
-    assert settings.region == "us-west-2"
+    assert settings.region == "ap-southeast-2"
     assert settings.project == "data-sdlc-framework"
-    assert settings.profile == ""
+    assert settings.profile == "default"
+    assert settings.credentials_path == "~/.aws/credentials"
 
 
 def test_saved_settings_take_priority_over_env_vars(monkeypatch, tmp_path):
@@ -196,6 +202,83 @@ def test_connection_reports_session_build_failure(monkeypatch):
     result = run_connection_test(ConnectionSettings())
     assert "error" in result
     assert "bad profile" in result["error"]
+
+
+def _clear_all_recognized_env_vars(monkeypatch):
+    for var in [
+        "AGENTCORE_AWS_REGION", "AWS_DEFAULT_REGION", "AWS_REGION", "AGENTCORE_PROJECT",
+        "AWS_PROFILE", "AGENTCORE_CONNECTION_PROFILE", "AGENTCORE_CONNECTION_CREDENTIALS_PATH",
+        "AWS_SHARED_CREDENTIALS_FILE",
+    ]:
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_build_boto3_client_unconfigured_uses_default_region_and_plain_boto3(monkeypatch, tmp_path):
+    """With nothing explicit configured (no saved settings, no recognized
+    env var), build_boto3_client must behave exactly like a bare
+    boto3.client() call — no override, no regression for callers that
+    never touch the Connection Tester."""
+    _use_tmp_config(monkeypatch, tmp_path)
+    _clear_all_recognized_env_vars(monkeypatch)
+
+    captured = {}
+
+    class FakeClient:
+        pass
+
+    def fake_boto3_client(service_name, **kwargs):
+        captured["service_name"] = service_name
+        captured.update(kwargs)
+        return FakeClient()
+
+    monkeypatch.setattr("boto3.client", fake_boto3_client)
+
+    client = build_boto3_client("sts", default_region="eu-central-1")
+    assert isinstance(client, FakeClient)
+    assert captured == {"service_name": "sts", "region_name": "eu-central-1"}
+
+
+def test_build_boto3_client_saved_region_overrides_default_region(monkeypatch, tmp_path):
+    # Written directly (not via save_settings(ConnectionSettings(...))) so only
+    # region is "explicit" — ConnectionSettings' own dataclass defaults would
+    # otherwise also populate credentials_path/profile with concrete values,
+    # which correctly (per production behavior) routes through build_session()
+    # instead — that path is covered by the credentials-path test below.
+    config_path = _use_tmp_config(monkeypatch, tmp_path)
+    config_path.write_text(json.dumps({"connection_tester": {"region": "ap-south-1"}}))
+    _clear_all_recognized_env_vars(monkeypatch)
+
+    captured = {}
+    monkeypatch.setattr("boto3.client", lambda service_name, **kwargs: captured.update({"service_name": service_name, **kwargs}))
+
+    build_boto3_client("cloudwatch", default_region="eu-central-1")
+    assert captured["region_name"] == "ap-south-1"  # explicit override wins over the caller's default
+
+
+def test_build_boto3_client_saved_credentials_path_routes_through_build_session(monkeypatch, tmp_path):
+    _use_tmp_config(monkeypatch, tmp_path)
+    _clear_all_recognized_env_vars(monkeypatch)
+    creds_file = tmp_path / "creds.json"
+    creds_file.write_text(json.dumps({"aws_access_key_id": "AKIA", "aws_secret_access_key": "s"}))
+    save_settings(ConnectionSettings(credentials_path=str(creds_file), region="us-east-1"))
+
+    class FakeClient:
+        def __init__(self, service_name):
+            self.service_name = service_name
+
+    class FakeSession:
+        def client(self, service_name, **kwargs):
+            return FakeClient(service_name)
+
+    build_session_calls = []
+    monkeypatch.setattr(connection_tester, "build_session", lambda settings: (build_session_calls.append(settings), FakeSession())[1])
+
+    client = build_boto3_client("bedrock-agentcore", default_region="us-west-2")
+    assert isinstance(client, FakeClient)
+    assert client.service_name == "bedrock-agentcore"
+    assert len(build_session_calls) == 1
+    assert build_session_calls[0].credentials_path == str(creds_file)
+    assert build_session_calls[0].region == "us-east-1"  # saved region, not the caller's default_region
 
 
 if __name__ == "__main__":

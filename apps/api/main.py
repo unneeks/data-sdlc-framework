@@ -22,6 +22,7 @@ from demo.scenarios import ScenarioRunner
 from domain.orchestration import AgentEvent, StepStatus, SystemMode
 from harness.bus import EventBus
 from harness.config import harness_config
+from harness.connection_tester import load_settings, run_connection_test
 from harness.orchestrator import Orchestrator
 from harness import store as harness_store
 
@@ -181,6 +182,28 @@ app.include_router(repo_sync_routes.router)
 app.include_router(connection_tester_routes.router)
 
 
+def _agentcore_connectivity_snapshot() -> dict:
+    """Real connectivity, sourced from the same settings/test the AgentCore
+    Connection Tester page uses — the app-wide top bar defers to this
+    instead of assuming REAL mode means reachable."""
+    settings = load_settings()
+    if harness_config.mode != SystemMode.REAL:
+        return {"checked": False, "reachable": None, "region": settings.region, "project": settings.project, "reason": None}
+
+    result = run_connection_test(settings)
+    aws_ok = bool((result.get("aws_identity") or {}).get("available"))
+    agentcore_ok = bool((result.get("agentcore") or {}).get("available"))
+    reachable = aws_ok and agentcore_ok
+    reason = None
+    if not reachable:
+        reason = (
+            result.get("error")
+            or (result.get("aws_identity") or {}).get("reason")
+            or (result.get("agentcore") or {}).get("reason")
+        )
+    return {"checked": True, "reachable": reachable, "region": settings.region, "project": settings.project, "reason": reason}
+
+
 @app.get("/api/status")
 def read_root():
     return {
@@ -189,6 +212,7 @@ def read_root():
         "mode": harness_config.mode,
         "agentcore_runtime": _runtime_config.get("runtime_arn", "NOT CONFIGURED"),
         "agentcore_connected": bool(_runtime_config),
+        "agentcore_connectivity": _agentcore_connectivity_snapshot(),
     }
 
 @app.get("/api/delivery-types")
@@ -289,7 +313,7 @@ def get_harness_mode():
 @app.post("/api/harness/mode")
 def set_harness_mode(payload: dict):
     harness_config.mode = SystemMode(payload["mode"])
-    return {"mode": harness_config.mode}
+    return {"mode": harness_config.mode, "agentcore_connectivity": _agentcore_connectivity_snapshot()}
 
 @app.get("/api/harness/steps/{session_id}")
 def get_harness_session_steps(session_id: str):

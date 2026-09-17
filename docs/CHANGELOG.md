@@ -5,6 +5,19 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-17
+
+### Added
+
+- **AgentCore connection settings elevated app-wide** (see `docs/adr/0012-agentcore-settings-elevation-and-harness-invoke-testing.md`):
+  - New defaults in `harness/connection_tester.py`: region `ap-southeast-2` (was `us-west-2`), credentials path `~/.aws/credentials`, profile `default`.
+  - New `build_boto3_client()` — every real AgentCore-calling code path (`harness/live_session.py`, `agents/runner.py`, `harness/metrics.py`'s two functions, `harness/adapters/agentcore_adapter.py`) now builds its boto3 client through it, honoring an explicit saved Connection Tester setting while preserving each site's own existing fallback when unconfigured. `agents/runner.py`'s `_run_harness` also stopped hardcoding `region = "us-west-2"` and now reads the deployed harness's own configured region, matching `live_session.py`.
+  - The top-of-app status bar now reflects real connectivity instead of assuming REAL mode means reachable: `GET /api/status` and `POST /api/harness/mode` both return a live `agentcore_connectivity` snapshot (reusing the same settings/test the Connection Tester page uses), and the banner turns red with a reason when it fails.
+- **Two new interactive tests on the AgentCore Connection Tester page**, both built on the existing Live Agent Orchestrator's session/streaming/tool-call machinery with zero new backend endpoints:
+  - **Invoke Harness** — pick a harness, submit a prompt, watch the response stream in; pending client-tool-call requests get the same inline Approve/Deny card `AgentOrchestratorWorkflow.tsx` already uses.
+  - **Test Local Callback** — sends an engineered prompt that makes the harness call the `client_git_status` client tool (exercising ADR 0006's `CLIENT_TOOL_CALL_REQUESTED`/`RESOLVED` bridge end to end); on receipt, a new popup shows "Tool call message received" and automatically approves + executes it, then shows the result — a full round trip in one click.
+- 18 new tests across `tests/test_connection_tester.py` (extended), `tests/test_agentcore_adapter.py`, `tests/test_harness_metrics.py`, `tests/test_agent_runner_harness_region.py`, and `tests/test_agentcore_connectivity_snapshot.py` (all new).
+
 ## [0.8.0] - 2026-09-17
 
 ### Added
