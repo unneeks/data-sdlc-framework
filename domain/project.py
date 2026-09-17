@@ -29,6 +29,23 @@ class LaneStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class ChecklistItem(BaseModel):
+    id: str
+    text: str
+    completed: bool = False
+    verified_by: Optional[str] = None
+
+
+class Comment(BaseModel):
+    id: str
+    task_id: str
+    author: str
+    author_type: str  # "agent", "human", "system"
+    body: str
+    timestamp: str
+    thread_id: Optional[str] = None
+
+
 class WorkProduct(BaseModel):
     key: str
     name: str
@@ -38,6 +55,8 @@ class WorkProduct(BaseModel):
     review_gate: bool = False
     updated_at: Optional[str] = None
     requested_at: Optional[str] = None
+    checklist: List[ChecklistItem] = Field(default_factory=list)
+    owner: Optional[Dict[str, Optional[str]]] = None  # {agent_id?: str, human_role?: str}
 
     def touch(self) -> None:
         self.updated_at = datetime.datetime.utcnow().isoformat() + "Z"

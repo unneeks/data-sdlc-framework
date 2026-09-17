@@ -1,4 +1,4 @@
-import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench, Share2, Zap, FileCheck, Radio, BarChart3, Plug } from 'lucide-react';
+import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench, Share2, Zap, FileCheck, Radio, BarChart3, Plug, Trello } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface SidebarProps {
@@ -34,6 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         { id: 'impact', label: 'Impact & RCA', icon: RefreshCw },
         { id: 'sdlc_demo', label: 'SDLC Demo', icon: FileCheck },
         { id: 'dashboard', label: 'Project Dashboard', icon: BarChart3 },
+        { id: 'kanban_board', label: 'Kanban Board', icon: Trello },
         { id: 'live_orchestrator', label: 'Agent Orchestrator', icon: Radio },
         { id: 'gate', label: 'Gate & Approval', icon: ShieldCheck },
         { id: 'cli', label: 'CLI Integrations', icon: Terminal },

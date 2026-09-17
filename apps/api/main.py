@@ -32,6 +32,7 @@ from agents.harness_agents.registry import list_agents as list_harness_agents, g
 from apps.api import live_routes
 from apps.api import dashboard_routes
 from apps.api import project_routes
+from apps.api import board_routes
 from apps.api import repo_sync_routes
 from apps.api import connection_tester_routes
 
@@ -175,6 +176,7 @@ async def start_harness():
 app.include_router(live_routes.router)
 app.include_router(dashboard_routes.router)
 app.include_router(project_routes.router)
+app.include_router(board_routes.router)
 app.include_router(repo_sync_routes.router)
 app.include_router(connection_tester_routes.router)
 
