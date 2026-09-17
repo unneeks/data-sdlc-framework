@@ -384,6 +384,45 @@ export async function sdlcDemoReset(): Promise<void> {
   await fetch(`${API_BASE}/sdlc-demo/reset`, { method: 'POST' });
 }
 
+// --- AgentCore Connection Tester APIs ---
+
+export interface ConnectionSettings {
+  credentials_path: string;
+  profile: string;
+  region: string;
+  project: string;
+}
+
+export interface ConnectionTestResult {
+  settings: ConnectionSettings;
+  aws_identity: { available: boolean; account?: string; arn?: string; user_id?: string; reason?: string } | null;
+  agentcore: { available: boolean; harness_count?: number; region?: string; reason?: string } | null;
+  error?: string;
+}
+
+export async function fetchConnectionSettings(): Promise<ConnectionSettings> {
+  const res = await fetch(`${API_BASE}/connection-tester/settings`);
+  return await res.json();
+}
+
+export async function saveConnectionSettings(settings: ConnectionSettings): Promise<ConnectionSettings> {
+  const res = await fetch(`${API_BASE}/connection-tester/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  return await res.json();
+}
+
+export async function runConnectionTest(settings?: ConnectionSettings): Promise<ConnectionTestResult> {
+  const res = await fetch(`${API_BASE}/connection-tester/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings || {}),
+  });
+  return await res.json();
+}
+
 // --- Project Dashboard APIs ---
 
 export interface DashboardWorkProduct {

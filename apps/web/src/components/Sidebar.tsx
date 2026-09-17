@@ -1,4 +1,4 @@
-import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench, Share2, Zap, FileCheck, Radio, BarChart3 } from 'lucide-react';
+import { LayoutGrid, Layers, GitBranch, Cpu, Play, RefreshCw, ShieldCheck, Terminal, Briefcase, Database, Wrench, Share2, Zap, FileCheck, Radio, BarChart3, Plug } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface SidebarProps {
@@ -37,6 +37,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         { id: 'live_orchestrator', label: 'Agent Orchestrator', icon: Radio },
         { id: 'gate', label: 'Gate & Approval', icon: ShieldCheck },
         { id: 'cli', label: 'CLI Integrations', icon: Terminal },
+      ],
+    },
+    {
+      title: 'Settings & Connectivity',
+      tabs: [
+        { id: 'connection_tester', label: 'AgentCore Connection Tester', icon: Plug },
       ],
     },
   ];
