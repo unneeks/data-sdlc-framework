@@ -5,6 +5,17 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-17
+
+### Added
+
+- **AgentCore Connection Tester** (`apps/web/src/components/AgentCoreConnectionTester.tsx`, sidebar → Settings & Connectivity) — a dedicated page to diagnose AWS/AgentCore connectivity from the operator's own machine, independent of any other feature (see `docs/adr/0009-agentcore-connection-tester.md`):
+  - `harness/connection_tester.py` — resolves a configurable credentials path (a JSON credentials export, or a standard AWS credentials file at a path that doesn't have to be `~/.aws/credentials`), an AWS profile, a region, and a project label, with the same env-var-then-persisted-override precedence `harness/repo_sync_config.py` already established. Region/project default from `AGENTCORE_AWS_REGION`/`AGENTCORE_PROJECT`.
+  - Two-stage connectivity test: `sts.get_caller_identity()` to validate the AWS session itself, then `bedrock-agentcore-control.list_harnesses()` to specifically confirm AgentCore access — reported separately so "credentials are fine but no AgentCore permission" is distinguishable from "credentials don't work."
+  - New API surface: `GET/POST /api/connection-tester/settings`, `POST /api/connection-tester/test`.
+  - Settings persist to `agentcore_config.json["connection_tester"]`, editable and re-testable from the UI without restarting the app.
+  - 12 new tests in `tests/test_connection_tester.py`.
+
 ## [0.5.0] - 2026-09-17
 
 ### Added
