@@ -52,9 +52,9 @@ def get_agentcore_runtime_info(agent_id: str) -> Dict[str, str]:
 
 def get_aws_identity(region: str = "us-west-2") -> Dict[str, Any]:
     try:
-        import boto3
+        from harness.connection_tester import build_boto3_client
 
-        sts = boto3.client("sts", region_name=region)
+        sts = build_boto3_client("sts", default_region=region)
         identity = sts.get_caller_identity()
         return {
             "available": True,
@@ -72,9 +72,9 @@ def get_agentcore_metrics(agent_runtime_id: str | None, region: str = "us-west-2
         return {"available": False, "reason": "no AgentCore runtime configured for this agent"}
 
     try:
-        import boto3
+        from harness.connection_tester import build_boto3_client
 
-        cloudwatch = boto3.client("cloudwatch", region_name=region)
+        cloudwatch = build_boto3_client("cloudwatch", default_region=region)
         dimension = {"Name": "AgentRuntimeId", "Value": agent_runtime_id}
 
         published = cloudwatch.list_metrics(Namespace=_NAMESPACE, Dimensions=[dimension])

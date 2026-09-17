@@ -23,10 +23,10 @@ class ServerRunAdapter:
 
     def _get_client(self) -> Any:
         if self._client is None:
-            import boto3
+            from harness.connection_tester import build_boto3_client
 
-            self._client = boto3.client(
-                "bedrock-agentcore", region_name=self._config.aws_region
+            self._client = build_boto3_client(
+                "bedrock-agentcore", default_region=self._config.aws_region
             )
         return self._client
 

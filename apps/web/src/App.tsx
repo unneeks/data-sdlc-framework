@@ -34,6 +34,9 @@ export default function App() {
   const [runtimeArn, setRuntimeArn] = useState<string>('');
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectTitle, setProjectTitle] = useState<string | null>(null);
+  const [agentcoreConnectivity, setAgentcoreConnectivity] = useState<{
+    checked: boolean; reachable: boolean | null; region: string; project: string; reason: string | null;
+  } | null>(null);
   const [demoState, setDemoState] = useState({
     current_step: 1,
     total_steps: 9,
@@ -49,6 +52,7 @@ export default function App() {
     fetch(`${API_BASE}/status`).then(r => r.json()).then(data => {
       setHarnessMode(data.mode || 'DEMO');
       setRuntimeArn(data.agentcore_runtime || '');
+      setAgentcoreConnectivity(data.agentcore_connectivity || null);
     }).catch(() => {});
   }, []);
 
@@ -69,8 +73,12 @@ export default function App() {
     if (harnessRes.ok) {
       const data = await harnessRes.json();
       setHarnessMode(data.mode);
+      setAgentcoreConnectivity(data.agentcore_connectivity || null);
     }
   };
+
+  const connectionFailed = harnessMode === 'REAL' && agentcoreConnectivity?.checked === true && agentcoreConnectivity.reachable === false;
+  const bannerColor = connectionFailed ? 'rose' : (harnessMode === 'REAL' ? 'emerald' : 'amber');
 
   const handleNextDemoStep = () => {
     const nextStep = Math.min(demoState.current_step + 1, demoState.total_steps);
@@ -117,26 +125,33 @@ export default function App() {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
       <div className="flex-1 flex flex-col min-h-screen relative z-10 overflow-hidden">
-        {/* AgentCore Mode Banner */}
+        {/* AgentCore Mode Banner — reflects the AgentCore Connection Tester's settings/live connectivity */}
         <div className={`px-4 py-2 flex items-center justify-between text-sm font-mono ${
-          harnessMode === 'REAL'
+          bannerColor === 'rose'
+            ? 'bg-rose-900/80 border-b border-rose-500/50 text-rose-200'
+            : bannerColor === 'emerald'
             ? 'bg-emerald-900/80 border-b border-emerald-500/50 text-emerald-200'
             : 'bg-amber-900/80 border-b border-amber-500/50 text-amber-200'
         }`}>
           <div className="flex items-center gap-3">
             <span className={`inline-block w-2 h-2 rounded-full ${
-              harnessMode === 'REAL' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+              bannerColor === 'rose' ? 'bg-rose-400 animate-pulse'
+                : bannerColor === 'emerald' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
             }`} />
             <span>
-              {harnessMode === 'REAL'
-                ? `AGENTCORE RUNTIME — ${runtimeArn}`
+              {connectionFailed
+                ? `AGENTCORE CONNECTION FAILED (${agentcoreConnectivity?.region}) — ${agentcoreConnectivity?.reason || 'check Connection Tester settings'}`
+                : harnessMode === 'REAL'
+                ? `AGENTCORE RUNTIME (${agentcoreConnectivity?.region || ''}) — ${runtimeArn}`
                 : 'LOCAL DEMO MODE — responses served locally'}
             </span>
           </div>
           <button
             onClick={toggleMode}
             className={`px-3 py-1 rounded text-xs font-semibold transition ${
-              harnessMode === 'REAL'
+              bannerColor === 'rose'
+                ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                : bannerColor === 'emerald'
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 : 'bg-amber-600 hover:bg-amber-500 text-white'
             }`}

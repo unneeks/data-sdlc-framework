@@ -577,7 +577,8 @@ class AgentRunner:
     # ── REAL mode: AgentCore Harness ───────────────────────
 
     def _run_harness(self, agent_key: str, config: dict, task_input: dict, trace: dict) -> dict:
-        import boto3
+        from harness.connection_tester import build_boto3_client
+        from harness.metrics import get_agentcore_runtime_info
 
         harness_arn = self._harness_arns.get(agent_key)
         if not harness_arn:
@@ -586,8 +587,8 @@ class AgentRunner:
                 f"Run setup_agentcore.py first or check agentcore_config.json."
             )
 
-        region = "us-west-2"
-        client = boto3.client("bedrock-agentcore", region_name=region)
+        default_region = get_agentcore_runtime_info(agent_key).get("region", "us-west-2")
+        client = build_boto3_client("bedrock-agentcore", default_region=default_region)
 
         session_id = trace["session_id"]
 

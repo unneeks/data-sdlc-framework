@@ -130,8 +130,8 @@ class LiveAgentSession:
     # ── AgentCore Harness backend (live) ────────────────────
 
     async def _run_agentcore(self, prompt: str) -> None:
-        import boto3
         from agents.runner import parse_harness_stream
+        from harness.connection_tester import build_boto3_client
 
         harness_arn = self._agent_config.get("harness_arn")
         if not harness_arn:
@@ -140,8 +140,7 @@ class LiveAgentSession:
                 f"Run setup_agentcore.py first or check agentcore_config.json."
             )
 
-        region = self._agent_config.get("region", "us-west-2")
-        client = boto3.client("bedrock-agentcore", region_name=region)
+        client = build_boto3_client("bedrock-agentcore", default_region=self._agent_config.get("region", "us-west-2"))
 
         system_prompt = self._build_system_prompt()
         harness_tools = list(self._agent_config.get("harness_tools", [])) + build_client_tool_advertisement()

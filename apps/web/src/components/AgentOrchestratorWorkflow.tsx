@@ -12,7 +12,7 @@ import {
 
 const POLL_INTERVAL_MS = 700;
 
-function formatLog(e: LiveEvent): { text: string; className: string } {
+export function formatLog(e: LiveEvent): { text: string; className: string } {
   const p = e.payload || {};
   switch (e.event_type) {
     case 'SESSION_STARTED':
