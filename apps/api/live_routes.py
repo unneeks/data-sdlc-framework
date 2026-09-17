@@ -53,21 +53,9 @@ def _load_json(rel_path: str) -> Any:
     return {}
 
 
-def _agentcore_runtime_info(agent_id: str) -> Dict[str, str]:
-    config = _load_json("agentcore_config.json")
-    harnesses = config.get("harnesses", {}) if isinstance(config, dict) else {}
-    info = harnesses.get(agent_id, {})
-    return {
-        "harness_arn": info.get("harness_arn", ""),
-        "harness_id": info.get("harness_id", ""),
-        "region": config.get("region", "us-west-2") if isinstance(config, dict) else "us-west-2",
-        "status": info.get("status", "NOT_PROVISIONED"),
-    }
-
-
 def _build_agentcore_agent_config(agent_id: str) -> Dict[str, Any]:
     config = _agent_runner.get_agent_config(agent_id) or {}
-    runtime_info = _agentcore_runtime_info(agent_id)
+    runtime_info = agentcore_metrics.get_agentcore_runtime_info(agent_id)
     return {**config, **runtime_info}
 
 
@@ -81,7 +69,7 @@ def list_live_agents():
         for a in list_harness_agents():
             if not a.get("has_harness"):
                 continue
-            runtime_info = _agentcore_runtime_info(a["key"])
+            runtime_info = agentcore_metrics.get_agentcore_runtime_info(a["key"])
             agentcore_agents.append({
                 "id": a["key"],
                 "name": a.get("name", a["key"]),
@@ -128,7 +116,7 @@ def aws_identity(region: str = "us-west-2"):
 
 @router.get("/metrics")
 def live_metrics(agent_id: str, lookback_minutes: int = 60):
-    runtime_info = _agentcore_runtime_info(agent_id)
+    runtime_info = agentcore_metrics.get_agentcore_runtime_info(agent_id)
     return agentcore_metrics.get_agentcore_metrics(
         runtime_info.get("harness_id") or None,
         region=runtime_info.get("region", "us-west-2"),

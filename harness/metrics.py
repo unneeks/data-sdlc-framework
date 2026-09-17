@@ -21,11 +21,33 @@ docs/adr/0003-dual-mode-demo-and-real.md).
 """
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 from typing import Any, Dict, List
 
 _NAMESPACE = "AWS/Bedrock-AgentCore"
 _EXPECTED_METRICS = ["Invocations", "Latency", "SessionCount", "Errors", "Throttles"]
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def get_agentcore_runtime_info(agent_id: str) -> Dict[str, str]:
+    """Look up an agent's provisioned Harness ARN/id/region/status from
+    agentcore_config.json (written by setup_agentcore.py). Shared by
+    apps/api/live_routes.py and harness/project_dashboard.py so both build
+    the same live agent_config shape from one place."""
+    config_path = _PROJECT_ROOT / "agentcore_config.json"
+    config: Dict[str, Any] = {}
+    if config_path.exists():
+        config = json.loads(config_path.read_text())
+    harnesses = config.get("harnesses", {}) if isinstance(config, dict) else {}
+    info = harnesses.get(agent_id, {})
+    return {
+        "harness_arn": info.get("harness_arn", ""),
+        "harness_id": info.get("harness_id", ""),
+        "region": config.get("region", "us-west-2") if isinstance(config, dict) else "us-west-2",
+        "status": info.get("status", "NOT_PROVISIONED"),
+    }
 
 
 def get_aws_identity(region: str = "us-west-2") -> Dict[str, Any]:
