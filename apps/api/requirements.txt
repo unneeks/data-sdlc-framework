@@ -2,4 +2,9 @@ fastapi>=0.100.0
 uvicorn>=0.22.0
 pydantic>=2.0.0
 python-multipart>=0.0.6
-boto3>=1.34.0
+# >=1.34.0 predates the bedrock-agentcore/bedrock-agentcore-control service
+# models (InvokeHarness, CreateHarness, InvokeAgentRuntime, etc.) this app
+# calls throughout harness/ and agents/runner.py — pinned to the latest
+# verified-working release so a fresh install can't silently resolve a
+# boto3 old enough to raise UnknownServiceError for either service.
+boto3>=1.43.96
