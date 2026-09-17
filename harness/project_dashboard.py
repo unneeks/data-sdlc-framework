@@ -290,7 +290,8 @@ class ProjectLane:
             agent_runner=agent_runner, agent_config=agent_config, github_backend=github_backend,
             metrics_tracker=self._metrics, metrics_lane_key=self.key,
         )
-        self._metrics.start_lane(self.key, source=backend.value)
+        model_id = agent_config.get("bedrock_model_id", "") if backend == AgentBackend.AGENTCORE else ""
+        self._metrics.start_lane(self.key, source=backend.value, model_id=model_id)
         await session.run(self.definition["prompt"])
 
         first_key = self.definition["work_products"][0]["key"]
@@ -400,6 +401,7 @@ class ProjectDashboardSession:
                 "counts": lane.counts(),
                 "elapsed_seconds": lane_metrics["elapsed_seconds"],
                 "token_cost_usd": lane_metrics["token_cost_usd"],
+                "cost_available": lane_metrics["cost_available"],
                 "total_tokens": lane_metrics["total_tokens"],
                 "backend": lane_metrics["source"],
                 "events": lane.events[-20:],
@@ -423,6 +425,7 @@ class ProjectDashboardSession:
             "started_at": self.started_at,
             "elapsed_seconds": project_metrics["elapsed_seconds"],
             "token_cost_usd": project_metrics["token_cost_usd"],
+            "cost_available": project_metrics["cost_available"],
             "total_tokens": project_metrics["total_tokens"],
             "work_products_done": wp_done,
             "work_products_total": wp_total,

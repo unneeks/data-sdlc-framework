@@ -48,6 +48,15 @@ function timeAgo(iso: string | null): string {
   return mins < 1 ? 'just now' : `${mins}m ago`;
 }
 
+// Cost is priced from a real, live AWS Price List rate applied to real
+// AgentCore token counts (harness/bedrock_pricing.py); a lane with no real
+// invocation to price (DEMO, GitHub Copilot fallback, or a failed live
+// pricing lookup) reports cost_available=false rather than a guessed
+// number — "N/A" beats a wrong dollar figure.
+function formatCost(cost: number | null, available: boolean): string {
+  return available && cost !== null ? `$${cost.toFixed(2)}` : 'N/A';
+}
+
 interface ProjectDashboardProps {
   projectId?: string | null;
   projectTitle?: string | null;
@@ -148,7 +157,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({ projectId, p
               </div>
               <div className="flex flex-wrap items-center gap-6">
                 <StatTile icon={<Clock className="w-4 h-4" />} label="Elapsed Time" value={formatElapsed(snapshot.elapsed_seconds)} sub={snapshot.live ? 'LIVE' : 'DEMO'} />
-                <StatTile icon={<DollarSign className="w-4 h-4" />} label="Total Token Cost" value={`$${snapshot.token_cost_usd.toFixed(2)}`} sub={`~${Math.round(snapshot.total_tokens / 1000)}k tokens`} />
+                <StatTile icon={<DollarSign className="w-4 h-4" />} label="Total Token Cost" value={formatCost(snapshot.token_cost_usd, snapshot.cost_available)} sub={`~${Math.round(snapshot.total_tokens / 1000)}k tokens`} />
                 <StatTile icon={<FileText className="w-4 h-4" />} label="Work Products" value={`${snapshot.work_products_done} / ${snapshot.work_products_total}`} sub={`${Math.round(100 * snapshot.work_products_done / Math.max(1, snapshot.work_products_total))}% complete`} />
                 <StatTile icon={<Users className="w-4 h-4" />} label="Agents Active" value={`${snapshot.agents_active} / ${snapshot.agents_total}`} sub={snapshot.agents_active === snapshot.agents_total ? 'All running' : 'Some idle'} />
                 <button onClick={handleReset} className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition">
@@ -301,7 +310,7 @@ const LaneCard: React.FC<{
 
         <div className="mt-auto pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
           <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {formatElapsed(lane.elapsed_seconds)}</span>
-          <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" /> ${lane.token_cost_usd.toFixed(2)} <span className="text-slate-600">~{Math.round(lane.total_tokens / 1000)}k tok</span></span>
+          <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" /> {formatCost(lane.token_cost_usd, lane.cost_available)} <span className="text-slate-600">~{Math.round(lane.total_tokens / 1000)}k tok</span></span>
         </div>
       </div>
     </div>
@@ -369,7 +378,7 @@ const ProjectInsightsPanel: React.FC<{ snapshot: DashboardSnapshot }> = ({ snaps
         </div>
         <div className="rounded-xl bg-slate-900/60 p-3">
           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Estimated Cost</div>
-          <div className="text-lg font-extrabold text-white mt-1">${snapshot.token_cost_usd.toFixed(2)}</div>
+          <div className="text-lg font-extrabold text-white mt-1">{formatCost(snapshot.token_cost_usd, snapshot.cost_available)}</div>
           <div className="text-[10px] text-slate-500">~{Math.round(snapshot.total_tokens / 1000)}k tokens</div>
         </div>
       </div>

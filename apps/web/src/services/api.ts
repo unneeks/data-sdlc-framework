@@ -465,7 +465,8 @@ export interface DashboardLane {
   work_products: DashboardWorkProduct[];
   counts: { done: number; total: number };
   elapsed_seconds: number;
-  token_cost_usd: number;
+  token_cost_usd: number | null;
+  cost_available: boolean;
   total_tokens: number;
   backend: string;
   events: any[];
@@ -493,7 +494,8 @@ export interface DashboardSnapshot {
   live: boolean;
   started_at: string;
   elapsed_seconds: number;
-  token_cost_usd: number;
+  token_cost_usd: number | null;
+  cost_available: boolean;
   total_tokens: number;
   work_products_done: number;
   work_products_total: number;
@@ -742,7 +744,8 @@ export async function fetchBoardSnapshot(sessionId: string): Promise<DashboardSn
     live: false,
     started_at: new Date().toISOString(),
     elapsed_seconds: 0,
-    token_cost_usd: 0,
+    token_cost_usd: null,
+    cost_available: false,
     total_tokens: 0,
     work_products_done: 0,
     work_products_total: 0,

@@ -5,6 +5,16 @@ All notable changes to the Data SDLC Framework are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-17
+
+### Changed
+
+- **Project Dashboard token cost is now priced from a real, live AWS Price List rate instead of a hardcoded placeholder** (see `docs/adr/0013-live-bedrock-pricing-for-project-dashboard-cost.md`):
+  - New `harness/bedrock_pricing.py::get_bedrock_model_pricing(model_id)` fetches real on-demand $/1K-token input+output pricing per Bedrock model from the AWS Price List API (`pricing` boto3 client, always pinned to `us-east-1`), cached in memory per process. Fails soft to `None` on any ambiguity or error — never guesses, never falls back to a hardcoded rate.
+  - `harness/agentcore_invocation_metrics.py`'s `PRICE_PER_1K_INPUT_USD`/`PRICE_PER_1K_OUTPUT_USD` constants and `TokenUsage.estimated_cost_usd` are removed entirely. `InvocationMetricsTracker.start_lane()` now accepts a `model_id` and attempts a live pricing fetch only for AgentCore-backed lanes; `lane_snapshot()`/`project_snapshot()` gain a `cost_available: bool` field, with `token_cost_usd` now `None` (not `0`) whenever cost isn't available.
+  - GitHub Copilot fallback lanes and DEMO-mode lanes — which have no real AgentCore invocation to price — now show cost as explicitly unavailable ("N/A" in the UI) rather than a heuristic-based dollar figure. `apps/web/src/components/ProjectDashboard.tsx`'s three cost tiles updated accordingly.
+  - 11 new/updated tests across `tests/test_bedrock_pricing.py` (new) and `tests/test_project_dashboard.py`.
+
 ## [0.9.0] - 2026-09-17
 
 ### Added
