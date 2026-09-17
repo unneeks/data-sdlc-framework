@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   deliveryTypes: DeliveryType[];
-  onSelectDeliveryType: (typeId: string) => void;
+  onSelectDeliveryType: (typeId: string, titleHint?: string) => void;
 }
 
 export const DeliveryTypeOnboarding: React.FC<Props> = ({ deliveryTypes, onSelectDeliveryType }) => {
@@ -136,7 +136,7 @@ export const DeliveryTypeOnboarding: React.FC<Props> = ({ deliveryTypes, onSelec
                     Change Delivery Type
                   </button>
                   <button
-                    onClick={() => onSelectDeliveryType(classificationResult.primary_delivery_type)}
+                    onClick={() => onSelectDeliveryType(classificationResult.primary_delivery_type, promptText)}
                     className="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-sm shadow-xl shadow-emerald-600/20 transition transform hover:-translate-y-0.5"
                   >
                     Accept & Instantiate Plan

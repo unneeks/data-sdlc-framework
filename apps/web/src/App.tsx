@@ -21,7 +21,7 @@ import { AgentOrchestratorWorkflow } from './components/AgentOrchestratorWorkflo
 import { ProjectDashboard } from './components/ProjectDashboard';
 import { AgentCoreConnectionTester } from './components/AgentCoreConnectionTester';
 
-import { fetchDeliveryTypes, fetchAgents, DeliveryType, Agent } from './services/api';
+import { fetchDeliveryTypes, fetchAgents, createProject, DeliveryType, Agent } from './services/api';
 
 const API_BASE = './api';
 
@@ -31,6 +31,8 @@ export default function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [harnessMode, setHarnessMode] = useState<string>('DEMO');
   const [runtimeArn, setRuntimeArn] = useState<string>('');
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectTitle, setProjectTitle] = useState<string | null>(null);
   const [demoState, setDemoState] = useState({
     current_step: 1,
     total_steps: 9,
@@ -159,7 +161,14 @@ export default function App() {
                 {activeTab === 'onboarding' && (
                   <DeliveryTypeOnboarding
                     deliveryTypes={deliveryTypes}
-                    onSelectDeliveryType={(id) => setActiveTab('sdlc')}
+                    onSelectDeliveryType={async (id, titleHint) => {
+                      const deliveryType = deliveryTypes.find((dt) => dt.id === id);
+                      const title = titleHint || deliveryType?.name || id.replace(/_/g, ' ');
+                      const project = await createProject(title, id);
+                      setProjectId(project.project_id);
+                      setProjectTitle(project.title);
+                      setActiveTab('dashboard');
+                    }}
                   />
                 )}
                 {activeTab === 'comparison' && <DeliveryComparisonMatrix />}
@@ -181,7 +190,7 @@ export default function App() {
                 {activeTab === 'ontology' && <OntologyExplorer />}
                 {activeTab === 'sdlc_demo' && <SDLCDemoWorkflow />}
                 {activeTab === 'live_orchestrator' && <AgentOrchestratorWorkflow />}
-                {activeTab === 'dashboard' && <ProjectDashboard />}
+                {activeTab === 'dashboard' && <ProjectDashboard projectId={projectId} projectTitle={projectTitle} />}
                 {activeTab === 'connection_tester' && <AgentCoreConnectionTester />}
               </motion.div>
             </AnimatePresence>

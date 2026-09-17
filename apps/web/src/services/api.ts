@@ -486,11 +486,33 @@ export interface DashboardSnapshot {
   human_attention_required: DashboardHumanAttentionItem[];
 }
 
-export async function startDashboard(live: boolean, title?: string): Promise<{ session_id: string; live: boolean }> {
+export async function startDashboard(
+  live: boolean, title?: string, projectId?: string,
+): Promise<{ session_id: string; live: boolean }> {
   const res = await fetch(`${API_BASE}/dashboard/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ live, title }),
+    body: JSON.stringify({ live, title, project_id: projectId }),
+  });
+  return await res.json();
+}
+
+// --- Project APIs (per-project datastore seeded at onboarding) ---
+
+export interface ProjectRecord {
+  project_id: string;
+  title: string;
+  delivery_type_id: string | null;
+  created_at: string;
+  phases: DashboardPhase[];
+  lanes: any[];
+}
+
+export async function createProject(title: string, deliveryTypeId?: string): Promise<ProjectRecord> {
+  const res = await fetch(`${API_BASE}/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, delivery_type_id: deliveryTypeId }),
   });
   return await res.json();
 }

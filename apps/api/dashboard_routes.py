@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
 
+from harness import project_store
 from harness.adapters.github_copilot_adapter import GithubCopilotBackend
 from harness.bus import EventBus
 from harness.project_dashboard import ProjectDashboardSession
@@ -47,10 +48,22 @@ async def start_dashboard(payload: dict):
     live = bool(payload.get("live", False))
     title = payload.get("title", "Customer Payments Data Product")
 
+    phases = phase_labels = lane_definitions = None
+    project_id = payload.get("project_id")
+    if project_id:
+        record = project_store.load_project(project_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"unknown project_id: {project_id}")
+        title = record.title
+        phases = [phase["key"] for phase in record.phases]
+        phase_labels = {phase["key"]: phase["label"] for phase in record.phases}
+        lane_definitions = record.lanes
+
     session_id = str(uuid.uuid4())
     session = ProjectDashboardSession(
         session_id=session_id, live=live, bus=_bus,
         agent_runner=_agent_runner, github_backend=_github_backend, title=title,
+        phases=phases, phase_labels=phase_labels, lane_definitions=lane_definitions,
     )
     _sessions[session_id] = session
     asyncio.create_task(session.run())

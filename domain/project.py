@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -41,3 +41,17 @@ class WorkProduct(BaseModel):
 
     def touch(self) -> None:
         self.updated_at = datetime.datetime.utcnow().isoformat() + "Z"
+
+
+class ProjectRecord(BaseModel):
+    """A persisted project created at onboarding — the datastore backing the
+    Project Dashboard's phases/lanes, replacing the single hardcoded template
+    every dashboard session used to share (see harness/project_dashboard.py's
+    DEFAULT_PHASES/DEFAULT_LANE_DEFINITIONS, which this seeds from)."""
+
+    project_id: str
+    title: str
+    delivery_type_id: Optional[str] = None
+    created_at: str
+    phases: List[Dict[str, Any]]
+    lanes: List[Dict[str, Any]]
