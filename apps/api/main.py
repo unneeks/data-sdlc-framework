@@ -185,23 +185,33 @@ app.include_router(connection_tester_routes.router)
 def _agentcore_connectivity_snapshot() -> dict:
     """Real connectivity, sourced from the same settings/test the AgentCore
     Connection Tester page uses — the app-wide top bar defers to this
-    instead of assuming REAL mode means reachable."""
+    instead of assuming REAL mode means reachable. Always runs live,
+    regardless of DEMO/REAL mode: whether AWS/AgentCore is actually
+    reachable is a fact about this machine's settings, not about whether
+    the rest of the app is currently simulating agent invocations."""
     settings = load_settings()
-    if harness_config.mode != SystemMode.REAL:
-        return {"checked": False, "reachable": None, "region": settings.region, "project": settings.project, "reason": None}
-
     result = run_connection_test(settings)
     aws_ok = bool((result.get("aws_identity") or {}).get("available"))
     agentcore_ok = bool((result.get("agentcore") or {}).get("available"))
     reachable = aws_ok and agentcore_ok
     reason = None
-    if not reachable:
+    harness_count = None
+    sample_harness_arn = None
+    if reachable:
+        agentcore_info = result.get("agentcore") or {}
+        harness_count = agentcore_info.get("harness_count")
+        harness_arns = agentcore_info.get("harness_arns") or []
+        sample_harness_arn = harness_arns[0] if harness_arns else None
+    else:
         reason = (
             result.get("error")
             or (result.get("aws_identity") or {}).get("reason")
             or (result.get("agentcore") or {}).get("reason")
         )
-    return {"checked": True, "reachable": reachable, "region": settings.region, "project": settings.project, "reason": reason}
+    return {
+        "checked": True, "reachable": reachable, "region": settings.region, "project": settings.project,
+        "reason": reason, "harness_count": harness_count, "sample_harness_arn": sample_harness_arn,
+    }
 
 
 @app.get("/api/status")

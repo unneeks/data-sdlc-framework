@@ -61,22 +61,46 @@ def _build_agentcore_agent_config(agent_id: str) -> Dict[str, Any]:
 
 @router.get("/agents")
 def list_live_agents():
-    """Every agent invocable from the Live Agent Orchestrator UI, tagged by backend."""
+    """Every agent invocable from the Live Agent Orchestrator UI, tagged by
+    backend. AgentCore harness status is refreshed against a live
+    list_harnesses() call when AWS is reachable, so this reflects what's
+    actually running right now rather than only the locally cached status
+    agentcore_config.json last recorded at provisioning time; falls back
+    to that cached status when AWS isn't reachable (e.g. no AWS access in
+    this environment) — never a hard failure."""
     agentcore_agents = []
     try:
-        from agents.harness_agents.registry import list_agents as list_harness_agents
+        from agents.harness_agents.registry import get_agent_config, list_agents as list_harness_agents
+        from harness.connection_tester import list_harnesses, load_settings
+
+        live = list_harnesses(load_settings())
+        live_status_by_harness_id = {
+            h.get("harnessId") or h.get("harness_id"): h.get("status", "UNKNOWN")
+            for h in live["harnesses"]
+            if h.get("harnessId") or h.get("harness_id")
+        }
 
         for a in list_harness_agents():
             if not a.get("has_harness"):
                 continue
             runtime_info = agentcore_metrics.get_agentcore_runtime_info(a["key"])
+            status = live_status_by_harness_id.get(runtime_info["harness_id"], runtime_info["status"])
+            # AWS's Harness resource carries no model config of its own
+            # (create_harness only takes harnessName/executionRoleArn) —
+            # the model is chosen per invocation, so "the harness's
+            # configured model" is this app's own agent_configs.yaml/
+            # .agentcore convention setting, not something list_harnesses
+            # could ever return.
+            agent_config = get_agent_config(a["key"]) or {}
             agentcore_agents.append({
                 "id": a["key"],
                 "name": a.get("name", a["key"]),
                 "description": a.get("mission", ""),
                 "backend": AgentBackend.AGENTCORE.value,
-                "live_ready": runtime_info["status"] == "READY",
-                "harness_status": runtime_info["status"],
+                "live_ready": status == "READY",
+                "harness_status": status,
+                "model_id": agent_config.get("bedrock_model_id", ""),
+                "harness_arn": runtime_info.get("harness_arn", ""),
             })
     except Exception:
         pass

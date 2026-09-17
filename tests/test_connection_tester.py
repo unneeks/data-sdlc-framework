@@ -13,7 +13,8 @@ sys.path.insert(0, str(root_dir))
 
 import harness.connection_tester as connection_tester
 from harness.connection_tester import (
-    ConnectionSettings, build_boto3_client, build_session, load_settings, run_connection_test, save_settings,
+    ConnectionSettings, build_boto3_client, build_session, list_harnesses, load_settings, run_connection_test,
+    save_settings,
 )
 
 
@@ -140,7 +141,10 @@ def test_connection_happy_path(monkeypatch):
             return {"Account": "123456789012", "Arn": "arn:aws:iam::123456789012:user/dev", "UserId": "AID123"}
 
         def list_harnesses(self, maxResults=10):
-            return {"harnesses": [{"id": "h1"}, {"id": "h2"}]}
+            return {"harnesses": [
+                {"id": "h1", "harnessArn": "arn:aws:bedrock-agentcore:us-west-2:1:harness/h1"},
+                {"id": "h2", "harnessArn": "arn:aws:bedrock-agentcore:us-west-2:1:harness/h2"},
+            ]}
 
     class FakeSession:
         def client(self, service_name, region_name=None):
@@ -153,6 +157,10 @@ def test_connection_happy_path(monkeypatch):
     assert result["aws_identity"]["account"] == "123456789012"
     assert result["agentcore"]["available"] is True
     assert result["agentcore"]["harness_count"] == 2
+    assert result["agentcore"]["harness_arns"] == [
+        "arn:aws:bedrock-agentcore:us-west-2:1:harness/h1",
+        "arn:aws:bedrock-agentcore:us-west-2:1:harness/h2",
+    ]
 
 
 def test_connection_reports_aws_identity_failure_and_skips_agentcore(monkeypatch):
@@ -202,6 +210,39 @@ def test_connection_reports_session_build_failure(monkeypatch):
     result = run_connection_test(ConnectionSettings())
     assert "error" in result
     assert "bad profile" in result["error"]
+
+
+def test_list_harnesses_returns_live_entries(monkeypatch, tmp_path):
+    _use_tmp_config(monkeypatch, tmp_path)
+    _clear_all_recognized_env_vars(monkeypatch)
+
+    captured = {}
+
+    class FakeClient:
+        def list_harnesses(self, maxResults=50):
+            captured["maxResults"] = maxResults
+            return {"harnesses": [{"harnessId": "h1", "harnessArn": "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/h1"}]}
+
+    monkeypatch.setattr(connection_tester, "build_boto3_client", lambda service_name, **kwargs: FakeClient())
+
+    result = list_harnesses(ConnectionSettings(region="ap-southeast-2"))
+    assert result == {
+        "available": True,
+        "harnesses": [{"harnessId": "h1", "harnessArn": "arn:aws:bedrock-agentcore:ap-southeast-2:1:harness/h1"}],
+    }
+    assert captured["maxResults"] == 50
+
+
+def test_list_harnesses_fails_soft_on_error(monkeypatch, tmp_path):
+    _use_tmp_config(monkeypatch, tmp_path)
+
+    def boom(service_name, **kwargs):
+        raise RuntimeError("AccessDeniedException")
+
+    monkeypatch.setattr(connection_tester, "build_boto3_client", boom)
+
+    result = list_harnesses(ConnectionSettings())
+    assert result == {"available": False, "reason": "AccessDeniedException", "harnesses": []}
 
 
 def _clear_all_recognized_env_vars(monkeypatch):

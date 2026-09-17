@@ -29,7 +29,7 @@ export const AgentCoreConnectionTester: React.FC = () => {
   const [selectedHarnessId, setSelectedHarnessId] = useState<string>('');
 
   const [invokePrompt, setInvokePrompt] = useState('Summarize what this project does.');
-  const [invokeLive, setInvokeLive] = useState(false);
+  const [invokeLive, setInvokeLive] = useState(true);
   const [invokeSessionId, setInvokeSessionId] = useState<string | null>(null);
   const [invokeStatus, setInvokeStatus] = useState<string>('IDLE');
   const [invokeEvents, setInvokeEvents] = useState<LiveEvent[]>([]);
@@ -299,6 +299,16 @@ export const AgentCoreConnectionTester: React.FC = () => {
             <option key={h.id} value={h.id}>{h.name} ({h.harness_status})</option>
           ))}
         </select>
+        {(() => {
+          const selected = harnesses.find((h) => h.id === selectedHarnessId);
+          if (!selected) return null;
+          return (
+            <div className="text-[11px] text-slate-500 font-mono space-y-0.5">
+              {selected.model_id && <div>Model: <span className="text-slate-300">{selected.model_id}</span></div>}
+              {selected.harness_arn && <div className="break-all">ARN: <span className="text-slate-300">{selected.harness_arn}</span></div>}
+            </div>
+          );
+        })()}
         <label className="flex items-center gap-2 text-xs text-slate-400">
           <input type="checkbox" checked={invokeLive} onChange={(e) => setInvokeLive(e.target.checked)}
             className="accent-cyan-500" />
